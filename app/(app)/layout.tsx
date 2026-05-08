@@ -1,3 +1,5 @@
+import { Suspense } from "react"
+
 import { AppNavigation } from "@/components/app/app-navigation"
 
 export default function AppLayout({
@@ -9,7 +11,9 @@ export default function AppLayout({
     <div className="min-h-screen flex flex-col">
       <AppNavigation />
       <main className="flex-1">
-        {children}
+        <Suspense fallback={<div className="min-h-[calc(100vh-3.5rem)] bg-background" />}>
+          {children}
+        </Suspense>
       </main>
     </div>
   )

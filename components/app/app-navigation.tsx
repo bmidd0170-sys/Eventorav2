@@ -55,12 +55,7 @@ export function AppNavigation() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-            <Button size="sm" className="gradient-primary border-0 text-white" asChild>
-              <Link href="/home">
-                <Plus className="w-4 h-4 mr-1" />
-                New Event
-              </Link>
-            </Button>
+           
           </div>
         </div>
       </div>

@@ -38,19 +38,19 @@ export function HeroSection() {
 
             <div className="flex flex-col sm:flex-row gap-4">
               <Button size="lg" className="gradient-primary border-0 text-white group" asChild>
-                <Link href="/home">
+                <Link href="/get-started">
                   Design Freely
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Link>
               </Button>
               <Button size="lg" variant="outline" className="border-border/50 hover:bg-secondary" asChild>
-                <Link href="/dashboard">
+                <Link href="/get-started">
                   <Calendar className="w-4 h-4 mr-2" />
                   Plan Efficiently
                 </Link>
               </Button>
               <Button size="lg" variant="ghost" className="text-muted-foreground hover:text-foreground" asChild>
-                <Link href="/settings">
+                <Link href="/get-started">
                   <Users className="w-4 h-4 mr-2" />
                   Grow Your Brand
                 </Link>

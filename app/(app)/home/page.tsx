@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -16,6 +16,7 @@ import {
   GraduationCap,
   Baby,
   Cake
+  , X
 } from "lucide-react"
 
 const quickPrompts = [
@@ -51,7 +52,12 @@ const recentProjects = [
 export default function HomePage() {
   const [inputValue, setInputValue] = useState("")
   const [isFocused, setIsFocused] = useState(false)
+  const [isDropOpen, setIsDropOpen] = useState(false)
+  const [attachments, setAttachments] = useState<Array<{ id: string; file: File; preview: string }>>([])
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const dropToggleRef = useRef<HTMLDivElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const router = useRouter()
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -69,6 +75,74 @@ export default function HomePage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSubmit(e)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      // Revoke object URLs on unmount
+      attachments.forEach((a) => URL.revokeObjectURL(a.preview))
+    }
+  }, [attachments])
+
+  useEffect(() => {
+    if (!isDropOpen) return
+    const onDocDown = (e: MouseEvent) => {
+      const target = e.target as Node | null
+      if (panelRef.current && panelRef.current.contains(target)) return
+      if (dropToggleRef.current && dropToggleRef.current.contains(target)) return
+      setIsDropOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsDropOpen(false)
+    }
+    document.addEventListener("mousedown", onDocDown)
+    document.addEventListener("keydown", onKey)
+    return () => {
+      document.removeEventListener("mousedown", onDocDown)
+      document.removeEventListener("keydown", onKey)
+    }
+  }, [isDropOpen])
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files) return
+    const allowed = Array.from(files).filter((f) => /image\/(png|jpe?g)/.test(f.type))
+    const newAttachments = allowed.map((file) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      file,
+      preview: URL.createObjectURL(file),
+    }))
+    setAttachments((s) => [...s, ...newAttachments])
+  }
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleFiles(e.target.files)
+    // keep dropbox open so user can see previews
+  }
+
+  const onRemoveAttachment = (id: string) => {
+    setAttachments((s) => {
+      const keep = s.filter((a) => a.id !== id)
+      const removed = s.find((a) => a.id === id)
+      if (removed) URL.revokeObjectURL(removed.preview)
+      return keep
+    })
+  }
+
+  const onDrop = (e: React.DragEvent) => {
+    const files = e.dataTransfer?.files
+    if (files && files.length) {
+      e.preventDefault()
+      e.stopPropagation()
+      handleFiles(files)
+    }
+  }
+
+  const onDragOver = (e: React.DragEvent) => {
+    // Only prevent default when dragging files so text drops still work
+    const types = Array.from(e.dataTransfer?.types || [])
+    if (types.includes("Files")) {
+      e.preventDefault()
     }
   }
 
@@ -90,6 +164,8 @@ export default function HomePage() {
           {/* Prompt input area */}
           <form onSubmit={handleSubmit}>
             <div 
+              onDrop={onDrop}
+              onDragOver={onDragOver}
               className={`relative bg-card rounded-2xl border transition-all duration-200 ${
                 isFocused 
                   ? "border-primary/50 shadow-lg shadow-primary/5" 
@@ -105,23 +181,78 @@ export default function HomePage() {
                 onKeyDown={handleKeyDown}
                 placeholder="Create an elegant wedding invitation with floral accents and RSVP page..."
                 rows={3}
-                className="w-full bg-transparent px-4 pt-4 pb-14 text-base resize-none focus:outline-none placeholder:text-muted-foreground/60"
+                className="w-full bg-transparent px-4 pt-4 pb-4 text-base resize-none focus:outline-none placeholder:text-muted-foreground/60"
               />
               
+              {/* Attachment previews section - text format below text */}
+              {attachments.length > 0 && (
+                <div className="border-t border-border/30 px-4 py-2 flex flex-wrap gap-2 items-center">
+                  {attachments.map((a) => (
+                    <div key={a.id} className="flex items-center gap-1 px-2 py-1 rounded bg-secondary/30 border border-border/40 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => window.open(a.preview, "_blank")}
+                        className="hover:text-primary transition-colors cursor-pointer"
+                        title={a.file.name}
+                      >
+                        {a.file.name.length > 20 ? `${a.file.name.slice(0, 17)}...` : a.file.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onRemoveAttachment(a.id)
+                        }}
+                        className="ml-1 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                        aria-label="Remove attachment"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
               {/* Input actions */}
-              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    size="icon" 
+              <div className="flex items-center justify-between px-4 py-3 border-t border-border/30">
+                <div ref={dropToggleRef} className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png, image/jpeg"
+                    multiple
+                    onChange={onFileInputChange}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsDropOpen((s) => !s)}
                   >
                     <Paperclip className="w-4 h-4" />
                   </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Attach inspiration images
-                  </span>
+                  <span className="text-xs text-muted-foreground">Attach inspiration images</span>
+
+                  {isDropOpen && (
+                    <div ref={panelRef} className="absolute left-4 bottom-full transform -translate-y-2 z-10">
+                      <div className="relative">
+                        <div className="absolute -bottom-1 left-4 w-3 h-3 bg-card/80 transform rotate-45" />
+                        <div className="rounded-lg bg-card/80 border border-border/50 p-2 shadow-sm flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => fileInputRef.current?.click()}
+                          >
+                            Open gallery
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
                 <Button 

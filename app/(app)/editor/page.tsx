@@ -228,6 +228,25 @@ export default function EditorPage() {
     setActivePage(newPage.id)
   }
 
+  const handlePreview = () => {
+    // Save current invitation data to localStorage for the preview page
+    const previewData = {
+      id: "current",
+      title: initialPrompt || "My Invitation",
+      theme: {
+        primaryColor: "from-accent via-primary to-chart-3",
+        backgroundColor: "bg-card",
+      },
+      pages: pages.map(page => ({
+        id: page.id,
+        type: page.id.split("-")[0], // Extract type from id like "cover-123" -> "cover"
+        content: page.content
+      }))
+    }
+    localStorage.setItem("eventora-preview-data", JSON.stringify(previewData))
+    router.push("/preview")
+  }
+
   const removePage = (pageId: string) => {
     if (pages.length <= 1) return
     setPages(prev => prev.filter(p => p.id !== pageId))
@@ -304,7 +323,11 @@ export default function EditorPage() {
 
           <div className="w-px h-5 bg-border" />
 
-          <Button variant="ghost" size="sm">
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={handlePreview}
+          >
             <Eye className="w-4 h-4 mr-1.5" />
             Preview
           </Button>

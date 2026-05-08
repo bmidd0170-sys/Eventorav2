@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { 
   Plus, 
@@ -100,9 +101,60 @@ const events = [
 ]
 
 export default function DashboardPage() {
+  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
 
-  const filteredEvents = events.filter(event => 
+  const handleViewEvent = (event: typeof events[0]) => {
+    // Create preview data based on the event
+    const previewData = {
+      id: event.id,
+      title: event.title,
+      theme: {
+        primaryColor: "from-accent via-primary to-chart-3",
+        backgroundColor: "bg-card",
+      },
+      pages: [
+        {
+          id: "cover",
+          type: "cover",
+          content: {
+            headline: "You're Invited",
+            subheadline: event.title,
+            hostName: "Event Host",
+          }
+        },
+        {
+          id: "details",
+          type: "details",
+          content: {
+            headline: "Event Details",
+            date: event.date,
+            time: event.time,
+            location: "Event Venue",
+            address: "123 Event Street",
+            description: event.description,
+          }
+        },
+        {
+          id: "rsvp",
+          type: "rsvp",
+          content: {
+            headline: "RSVP",
+            subheadline: "Please let us know if you can make it",
+            fields: [
+              { label: "Full Name", type: "text", required: true },
+              { label: "Email", type: "email", required: true },
+              { label: "Number of Guests", type: "select", options: ["1", "2", "3", "4"], required: true },
+            ]
+          }
+        }
+      ]
+    }
+    localStorage.setItem("eventora-preview-data", JSON.stringify(previewData))
+    router.push("/preview")
+  }
+  
+  const filteredEvents = events.filter(event =>
     event.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -196,11 +248,9 @@ function EventCard({ event }: { event: typeof events[0] }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href={`/editor?event=${event.id}`}>
+              <DropdownMenuItem onClick={() => handleViewEvent(event)}>
                   <Eye className="w-4 h-4 mr-2" />
                   View
-                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href={`/editor?event=${event.id}`}>

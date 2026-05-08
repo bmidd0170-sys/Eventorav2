@@ -29,14 +29,14 @@ export function CTASection() {
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button size="lg" className="gradient-primary border-0 text-white group px-8" asChild>
-            <Link href="/home">
+            <Link href="/get-started">
               Get Started Free
               <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </Link>
           </Button>
           <Button size="lg" variant="outline" className="border-border/50 hover:bg-secondary" asChild>
-            <Link href="/builder">
-              Try the Builder
+            <Link href="/sign-in">
+              Sign In
             </Link>
           </Button>
         </div>

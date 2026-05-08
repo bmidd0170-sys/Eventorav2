@@ -1,7 +1,10 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { signOut } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 import { 
   User,
   Palette,
@@ -14,7 +17,8 @@ import {
   Plus,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  LogOut
 } from "lucide-react"
 
 type Tab = "profile" | "brand" | "notifications" | "privacy"
@@ -68,6 +72,13 @@ export default function SettingsPage() {
 }
 
 function ProfileSettings() {
+  const router = useRouter()
+
+  async function handleSignOut() {
+    await signOut(auth)
+    router.push("/")
+  }
+
   return (
     <div className="space-y-8">
       <section className="bg-card rounded-xl border border-border/50 p-6">
@@ -152,6 +163,21 @@ function ProfileSettings() {
             Update Password
           </Button>
         </div>
+      </section>
+
+      <section className="bg-card rounded-xl border border-border/50 p-6">
+        <h2 className="text-lg font-medium mb-4">Sign Out</h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Sign out of your account on this device.
+        </p>
+        <Button
+          variant="outline"
+          className="border-destructive/50 text-destructive hover:bg-destructive/10"
+          onClick={handleSignOut}
+        >
+          <LogOut className="w-4 h-4 mr-2" />
+          Sign Out
+        </Button>
       </section>
     </div>
   )

@@ -33,10 +33,10 @@ export function Navigation() {
 
           <div className="hidden md:flex items-center gap-3">
             <Button variant="ghost" size="sm" asChild>
-              <Link href="/home">Sign In</Link>
+              <Link href="/sign-in">Sign In</Link>
             </Button>
             <Button size="sm" className="gradient-primary border-0 text-white" asChild>
-              <Link href="/home">Get Started</Link>
+              <Link href="/get-started">Get Started</Link>
             </Button>
           </div>
 
@@ -63,10 +63,10 @@ export function Navigation() {
             </Link>
             <div className="pt-3 flex flex-col gap-2">
               <Button variant="ghost" size="sm" asChild>
-                <Link href="/home">Sign In</Link>
+                <Link href="/sign-in">Sign In</Link>
               </Button>
               <Button size="sm" className="gradient-primary border-0 text-white" asChild>
-                <Link href="/home">Get Started</Link>
+                <Link href="/get-started">Get Started</Link>
               </Button>
             </div>
           </div>

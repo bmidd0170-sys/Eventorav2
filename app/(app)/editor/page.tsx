@@ -5,7 +5,6 @@ import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { defaultInvitationId, getInvitationById } from "@/lib/invitations"
-import { InvitationPageRenderer as SharedInvitationPageRenderer } from "@/components/invitation/invitation-page-renderer"
 import {
   Sparkles,
   Send,
@@ -95,10 +94,6 @@ type PageContent = {
   date?: string
   time?: string
   location?: string
-  venue?: string
-  address?: string
-  directions?: string
-  mapUrl?: string
   buttons?: { label: string; action: string }[]
   fields?: { label: string; type: string; required: boolean }[]
   items?: { icon: string; label: string; value: string }[]
@@ -121,42 +116,42 @@ type Version = {
 
 type AiAction =
   | {
-      type: "patch_page"
-      pageId: string
-      content: Partial<PageContent>
-    }
+    type: "patch_page"
+    pageId: string
+    content: Partial<PageContent>
+  }
   | {
-      type: "add_page"
-      pageType: string
-      name?: string
-      content?: Partial<PageContent>
-    }
+    type: "add_page"
+    pageType: string
+    name?: string
+    content?: Partial<PageContent>
+  }
   | {
-      type: "focus_page"
-      pageId: string
-    }
+    type: "focus_page"
+    pageId: string
+  }
   | {
-      type: "add_element"
-      pageId: string
-      element: InvitationElement
-      parentElementId?: string
-    }
+    type: "add_element"
+    pageId: string
+    element: InvitationElement
+    parentElementId?: string
+  }
   | {
-      type: "patch_element"
-      pageId: string
-      elementId: string
-      content: Partial<InvitationElement>
-    }
+    type: "patch_element"
+    pageId: string
+    elementId: string
+    content: Partial<InvitationElement>
+  }
   | {
-      type: "remove_element"
-      pageId: string
-      elementId: string
-    }
+    type: "remove_element"
+    pageId: string
+    elementId: string
+  }
   | {
-      type: "focus_element"
-      pageId: string
-      elementId: string
-    }
+    type: "focus_element"
+    pageId: string
+    elementId: string
+  }
 
 type AiEditorResponse = {
   reply: string
@@ -236,17 +231,6 @@ export default function EditorPage() {
   const [showPagePanel, setShowPagePanel] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Attachments / gallery
-  const [attachments, setAttachments] = useState<Array<{ id: string; file: File; preview: string }>>([])
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    return () => {
-      // Revoke object URLs on unmount
-      attachments.forEach((a) => URL.revokeObjectURL(a.preview))
-    }
-  }, [attachments])
-
   // Initialize with prompt if provided
   useEffect(() => {
     if (initialPrompt) {
@@ -312,38 +296,28 @@ export default function EditorPage() {
         }),
       })
 
-      console.log("[Editor] AI request sent, status:", response.status)
-
       if (!response.ok) {
         throw new Error("AI request failed")
       }
 
       const data = (await response.json()) as AiEditorResponse
-      console.log("[Editor] AI response received:", { reply: data.reply?.substring(0, 100), actionsCount: data.actions?.length })
-
-      let nextPages = pages
-      let nextActivePage = activePage
-      let didMutate = false
-      let appliedActions: AiAction[] = []
-
-      if (data.actions?.length) {
-        console.log("[Editor] Applying actions:", data.actions.map(a => ({ type: a.type, ...('pageId' in a && { pageId: a.pageId }) })))
-        const applied = applyAiActions(data.actions, pages)
-        nextPages = applied.pages
-        nextActivePage = applied.activePageId ?? activePage
-        didMutate = applied.didMutate
-        appliedActions = data.actions
-        console.log("[Editor] Actions applied, didMutate:", didMutate)
-      } else {
-        console.log("[Editor] No actions returned from AI")
-      }
-
-      const reply = buildAssistantReply(data.reply, appliedActions, pages, nextPages, activePage, nextActivePage, didMutate)
+      const reply = data.reply?.trim() || "I took a pass at that and shaped the invitation with a clearer visual rhythm."
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
         content: reply,
         timestamp: new Date(),
+      }
+
+      let nextPages = pages
+      let nextActivePage = activePage
+      let didMutate = false
+
+      if (data.actions?.length) {
+        const applied = applyAiActions(data.actions, pages)
+        nextPages = applied.pages
+        nextActivePage = applied.activePageId ?? activePage
+        didMutate = applied.didMutate
       }
 
       setMessages(prev => [...prev, assistantMessage])
@@ -374,47 +348,6 @@ export default function EditorPage() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
       handleSendMessage()
-    }
-  }
-
-  // File / image attachments handlers
-  const handleFiles = (files: FileList | null) => {
-    if (!files) return
-    const allowed = Array.from(files).filter((f) => /image\/(png|jpe?g)/.test(f.type))
-    const newAttachments = allowed.map((file) => ({
-      id: `${Date.now()}-${Math.random()}`,
-      file,
-      preview: URL.createObjectURL(file),
-    }))
-    setAttachments((s) => [...s, ...newAttachments])
-  }
-
-  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    handleFiles(e.target.files)
-  }
-
-  const onRemoveAttachment = (id: string) => {
-    setAttachments((s) => {
-      const keep = s.filter((a) => a.id !== id)
-      const removed = s.find((a) => a.id === id)
-      if (removed) URL.revokeObjectURL(removed.preview)
-      return keep
-    })
-  }
-
-  const onDrop = (e: React.DragEvent) => {
-    const files = e.dataTransfer?.files
-    if (files && files.length) {
-      e.preventDefault()
-      e.stopPropagation()
-      handleFiles(files)
-    }
-  }
-
-  const onDragOver = (e: React.DragEvent) => {
-    const types = Array.from(e.dataTransfer?.types || [])
-    if (types.includes("Files")) {
-      e.preventDefault()
     }
   }
 
@@ -458,35 +391,6 @@ export default function EditorPage() {
 
   const currentPage = pages.find(p => p.id === activePage) || pages[0]
 
-  // Version navigation (undo/redo)
-  const currentVersionIndex = versions.findIndex((v) => v.id === activeVersion)
-
-  const undo = () => {
-    if (currentVersionIndex > 0) {
-      const prev = versions[currentVersionIndex - 1]
-      setActiveVersion(prev.id)
-    }
-  }
-
-  const redo = () => {
-    if (currentVersionIndex >= 0 && currentVersionIndex < versions.length - 1) {
-      const next = versions[currentVersionIndex + 1]
-      setActiveVersion(next.id)
-    }
-  }
-
-  // When activeVersion changes, load that version's pages into editor
-  useEffect(() => {
-    const v = versions.find((ver) => ver.id === activeVersion)
-    if (v) {
-      setPages(v.pages)
-      // keep active page if present, otherwise pick first page
-      if (!v.pages.some((p) => p.id === activePage)) {
-        setActivePage(v.pages[0]?.id ?? "")
-      }
-    }
-  }, [activeVersion, versions])
-
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col bg-background">
       {/* Top bar */}
@@ -521,22 +425,10 @@ export default function EditorPage() {
 
           {/* Undo/Redo */}
           <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={undo}
-              disabled={currentVersionIndex <= 0}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8">
               <Undo2 className="w-4 h-4" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={redo}
-              disabled={currentVersionIndex >= versions.length - 1}
-            >
+            <Button variant="ghost" size="icon" className="h-8 w-8">
               <Redo2 className="w-4 h-4" />
             </Button>
           </div>
@@ -597,8 +489,8 @@ export default function EditorPage() {
                     </div>
                   )}
                   <div className={`rounded-2xl px-4 py-3 ${message.role === "user"
-                      ? "bg-primary text-primary-foreground rounded-br-sm"
-                      : "bg-secondary rounded-bl-sm"
+                    ? "bg-primary text-primary-foreground rounded-br-sm"
+                    : "bg-secondary rounded-bl-sm"
                     }`}>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
                   </div>
@@ -624,17 +516,8 @@ export default function EditorPage() {
           </div>
 
           {/* Input */}
-          <div className="p-4 border-t border-border/50" onDrop={onDrop} onDragOver={onDragOver}>
+          <div className="p-4 border-t border-border/50">
             <div className="relative bg-secondary rounded-xl">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={onFileInputChange}
-                className="hidden"
-              />
-
               <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
@@ -643,36 +526,6 @@ export default function EditorPage() {
                 rows={2}
                 className="w-full bg-transparent px-4 pt-3 pb-10 text-sm resize-none focus:outline-none placeholder:text-muted-foreground/60"
               />
-
-              {attachments.length > 0 && (
-                <div className="border-t border-border/30 px-4 py-2 flex flex-wrap gap-2 items-center">
-                  {attachments.map((a) => (
-                    <div key={a.id} className="flex items-center gap-1 px-2 py-1 rounded bg-secondary/30 border border-border/40 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => window.open(a.preview, "_blank")}
-                        className="hover:text-primary transition-colors cursor-pointer"
-                        title={a.file.name}
-                      >
-                        {a.file.name.length > 20 ? `${a.file.name.slice(0, 17)}...` : a.file.name}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          onRemoveAttachment(a.id)
-                        }}
-                        className="ml-1 text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-                        aria-label="Remove attachment"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
               <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
@@ -681,7 +534,7 @@ export default function EditorPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
                     <Type className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => fileInputRef.current?.click()}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
                     <ImageIcon className="w-4 h-4" />
                   </Button>
                 </div>
@@ -690,8 +543,8 @@ export default function EditorPage() {
                   disabled={!inputValue.trim()}
                   onClick={handleSendMessage}
                   className={`h-7 w-7 rounded-lg ${inputValue.trim()
-                      ? "gradient-primary border-0 text-white"
-                      : "bg-muted text-muted-foreground"
+                    ? "gradient-primary border-0 text-white"
+                    : "bg-muted text-muted-foreground"
                     }`}
                 >
                   <Send className="w-3.5 h-3.5" />
@@ -736,8 +589,8 @@ export default function EditorPage() {
                   <div
                     key={page.id}
                     className={`group flex items-center gap-2 px-2 py-2 rounded-lg cursor-pointer transition-all ${activePage === page.id
-                        ? "bg-primary/20 text-foreground"
-                        : "hover:bg-secondary text-muted-foreground hover:text-foreground"
+                      ? "bg-primary/20 text-foreground"
+                      : "hover:bg-secondary text-muted-foreground hover:text-foreground"
                       }`}
                     onClick={() => setActivePage(page.id)}
                   >
@@ -808,8 +661,8 @@ export default function EditorPage() {
             {/* Preview container */}
             <div
               className={`transition-all duration-300 ${previewMode === "mobile"
-                  ? "w-[375px]"
-                  : "w-full max-w-lg"
+                ? "w-[375px]"
+                : "w-full max-w-lg"
                 }`}
             >
               <InvitePagePreview page={currentPage} />
@@ -822,8 +675,8 @@ export default function EditorPage() {
                   key={version.id}
                   onClick={() => setActiveVersion(version.id)}
                   className={`w-8 h-8 rounded-lg border text-xs font-medium transition-all ${activeVersion === version.id
-                      ? "border-primary bg-primary/20 text-primary"
-                      : "border-border/50 bg-card/50 text-muted-foreground hover:border-primary/50"
+                    ? "border-primary bg-primary/20 text-primary"
+                    : "border-border/50 bg-card/50 text-muted-foreground hover:border-primary/50"
                     }`}
                 >
                   {version.label}
@@ -839,12 +692,108 @@ export default function EditorPage() {
 
 // Invite page preview component
 function InvitePagePreview({ page }: { page: InvitePage }) {
-  const pageType = page.id.split("-")[0]
+  const { content } = page
+  const customElements = [...(content.elements ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+
   return (
     <div className="bg-card rounded-2xl border border-border/50 overflow-hidden shadow-2xl">
-      <SharedInvitationPageRenderer
-        page={{ type: pageType, content: page.content, icon: page.icon }}
-      />
+      {/* Page header with gradient */}
+      <div className="h-28 bg-gradient-to-br from-primary/30 via-accent/20 to-chart-3/20 relative">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
+      </div>
+
+      {/* Content */}
+      <div className="p-8 -mt-12 relative">
+        {/* Icon badge */}
+        <div className="w-14 h-14 mx-auto rounded-full bg-card border-4 border-card flex items-center justify-center shadow-lg mb-6">
+          <page.icon className="w-5 h-5 text-primary" />
+        </div>
+
+        <div className="text-center space-y-6">
+          {content.headline && (
+            <h2 className="text-2xl font-semibold gradient-text">{content.headline}</h2>
+          )}
+
+          {content.subheadline && (
+            <p className="text-sm text-muted-foreground">{content.subheadline}</p>
+          )}
+
+          {content.body && (
+            <p className="text-sm text-muted-foreground leading-relaxed">{content.body}</p>
+          )}
+
+          {/* Date/Time/Location */}
+          {(content.date || content.time || content.location) && (
+            <div className="space-y-3 py-4">
+              {content.date && (
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-primary" />
+                  <span>{content.date}</span>
+                </div>
+              )}
+              {content.time && (
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-accent" />
+                  <span>{content.time}</span>
+                </div>
+              )}
+              {content.location && (
+                <div className="flex items-center justify-center gap-2 text-sm">
+                  <MapPin className="w-4 h-4 text-chart-3" />
+                  <span>{content.location}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Form fields */}
+          {content.fields && (
+            <div className="space-y-3 text-left">
+              {content.fields.map((field, index) => (
+                <div key={index}>
+                  <label className="text-xs text-muted-foreground mb-1 block">
+                    {field.label} {field.required && <span className="text-destructive">*</span>}
+                  </label>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      className="w-full bg-secondary rounded-lg px-3 py-2 text-sm resize-none h-20 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder={`Enter ${field.label.toLowerCase()}...`}
+                    />
+                  ) : (
+                    <input
+                      type={field.type}
+                      className="w-full bg-secondary rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      placeholder={`Enter ${field.label.toLowerCase()}...`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Buttons */}
+          {content.buttons && (
+            <div className="flex justify-center gap-3 pt-4">
+              {content.buttons.map((button, index) => (
+                <Button
+                  key={index}
+                  className="gradient-primary border-0 text-white"
+                >
+                  {button.label}
+                </Button>
+              ))}
+            </div>
+          )}
+
+          {customElements.length > 0 && (
+            <div className="pt-6 space-y-4 text-left">
+              {customElements.map((element) => (
+                <InvitationElementView key={element.id} element={element} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -995,10 +944,8 @@ function getDefaultContentForPageType(type: string): PageContent {
     case "location":
       return {
         headline: "Location",
-        venue: "Venue Name",
-        address: "Add venue address here",
-        directions: "Detailed directions will appear here",
-        mapUrl: "https://maps.google.com",
+        location: "Address TBD",
+        body: "Directions and parking information will go here."
       }
     case "schedule":
       return {
@@ -1054,95 +1001,6 @@ function generateFallbackAIResponse(input: string): Message {
     content: response,
     timestamp: new Date()
   }
-}
-
-function buildAssistantReply(
-  apiReply: string | undefined,
-  actions: AiAction[],
-  previousPages: InvitePage[],
-  nextPages: InvitePage[],
-  previousActivePage: string,
-  nextActivePage: string,
-  didMutate: boolean,
-) {
-  const cleanedReply = apiReply?.trim()
-  if (cleanedReply) {
-    return cleanedReply
-  }
-
-  const pageNameById = new Map(previousPages.map((page) => [page.id, page.name]))
-  const nextPageNameById = new Map(nextPages.map((page) => [page.id, page.name]))
-  const actionSummary = summarizeAiActions(actions, pageNameById, nextPageNameById)
-
-  if (actionSummary) {
-    return didMutate
-      ? `${actionSummary} I also moved focus to ${nextPageNameById.get(nextActivePage) || nextActivePage}.`
-      : actionSummary
-  }
-
-  if (didMutate) {
-    return `I updated the invitation and moved focus to ${nextPageNameById.get(nextActivePage) || nextActivePage}.`
-  }
-
-  return "I took a pass at the invitation and kept the structure aligned with your request."
-}
-
-function summarizeAiActions(
-  actions: AiAction[],
-  previousPageNameById: Map<string, string>,
-  nextPageNameById: Map<string, string>,
-) {
-  const parts: string[] = []
-
-  for (const action of actions) {
-    if (action.type === "add_page") {
-      parts.push(`I added a ${action.name || action.pageType} page.`)
-      continue
-    }
-
-    if (action.type === "patch_page") {
-      const pageName = previousPageNameById.get(action.pageId) || action.pageId
-      const changedFields = Object.keys(action.content)
-      const readableFields = changedFields.length > 0 ? changedFields.join(", ") : "the page content"
-      parts.push(`I updated ${pageName} and changed ${readableFields}.`)
-      continue
-    }
-
-    if (action.type === "focus_page") {
-      const pageName = nextPageNameById.get(action.pageId) || action.pageId
-      parts.push(`I focused ${pageName}.`)
-      continue
-    }
-
-    if (action.type === "add_element") {
-      const pageName = previousPageNameById.get(action.pageId) || action.pageId
-      parts.push(`I added a ${action.element.type} element to ${pageName}.`)
-      continue
-    }
-
-    if (action.type === "patch_element") {
-      const pageName = previousPageNameById.get(action.pageId) || action.pageId
-      parts.push(`I updated an element on ${pageName}.`)
-      continue
-    }
-
-    if (action.type === "remove_element") {
-      const pageName = previousPageNameById.get(action.pageId) || action.pageId
-      parts.push(`I removed an element from ${pageName}.`)
-      continue
-    }
-
-    if (action.type === "focus_element") {
-      const pageName = nextPageNameById.get(action.pageId) || action.pageId
-      parts.push(`I focused an element on ${pageName}.`)
-    }
-  }
-
-  if (!parts.length) {
-    return ""
-  }
-
-  return parts.join(" ")
 }
 
 function applyAiActions(actions: AiAction[], currentPages: InvitePage[]) {
@@ -1330,7 +1188,7 @@ function patchElementCollection(
   elements: InvitationElement[],
   targetId: string,
   updater: (element: InvitationElement) => InvitationElement
-) : InvitationElement[] {
+): InvitationElement[] {
   let didMutate = false
 
   const nextElements: InvitationElement[] = []

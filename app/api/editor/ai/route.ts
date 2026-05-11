@@ -44,42 +44,42 @@ type ElementSummary = {
 
 type AiAction =
   | {
-      type: "patch_page"
-      pageId: string
-      content: Record<string, unknown>
-    }
+    type: "patch_page"
+    pageId: string
+    content: Record<string, unknown>
+  }
   | {
-      type: "add_page"
-      pageType: string
-      name?: string
-      content?: Record<string, unknown>
-    }
+    type: "add_page"
+    pageType: string
+    name?: string
+    content?: Record<string, unknown>
+  }
   | {
-      type: "focus_page"
-      pageId: string
-    }
+    type: "focus_page"
+    pageId: string
+  }
   | {
-      type: "add_element"
-      pageId: string
-      element: ElementSummary
-      parentElementId?: string
-    }
+    type: "add_element"
+    pageId: string
+    element: ElementSummary
+    parentElementId?: string
+  }
   | {
-      type: "patch_element"
-      pageId: string
-      elementId: string
-      content: Record<string, unknown>
-    }
+    type: "patch_element"
+    pageId: string
+    elementId: string
+    content: Record<string, unknown>
+  }
   | {
-      type: "remove_element"
-      pageId: string
-      elementId: string
-    }
+    type: "remove_element"
+    pageId: string
+    elementId: string
+  }
   | {
-      type: "focus_element"
-      pageId: string
-      elementId: string
-    }
+    type: "focus_element"
+    pageId: string
+    elementId: string
+  }
 
 type AiResponse = {
   reply?: string
@@ -88,7 +88,7 @@ type AiResponse = {
 
 export const runtime = "nodejs"
 
-const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
+const defaultModel = process.env.OPENAI_MODEL || "gpt-4.1-mini"
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY
@@ -98,25 +98,13 @@ export async function POST(req: NextRequest) {
   try {
     body = (await req.json()) as EditorRequest
   } catch {
-    console.error("[AI Route] Invalid request body")
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 })
   }
 
-  console.log("[AI Route] Incoming request:", {
-    prompt: body.prompt,
-    hasApiKey: !!apiKey,
-    activePage: body.activePage,
-    pagesCount: body.pages.length,
-    recentMessagesCount: body.recentMessages.length,
-  })
-
   if (!apiKey) {
-    console.warn("[AI Route] No OpenAI API key found, using fallback planner")
-    const fallbackActions = inferActionsFromPrompt(body)
-    console.log("[AI Route] Fallback actions generated:", fallbackActions)
     return NextResponse.json({
       reply: defaultReply(body),
-      actions: fallbackActions,
+      actions: [],
       source: "fallback",
     })
   }
@@ -147,7 +135,6 @@ Your job: help refine event invitation pages inside the editor. Make the AI feel
 
 Behavior rules:
 - Prefer concrete design guidance and useful page edits.
-- If the user asks to change, redesign, add, or replace a page, always return at least one action that mutates the invitation.
 - When asked to improve copy, layout, hierarchy, motion, spacing, or tone, return actionable changes.
 - When the request is about a specific page, use patch_page for that page.
 - When the request clearly asks for a new page, use add_page with one of: cover, details, rsvp, location, schedule, gallery, gifts, faq.
@@ -155,18 +142,6 @@ Behavior rules:
 - Element types you can use: container, text, image, button, badge, divider, spacer.
 - Use containers to group nested elements with children and use order to control stacking.
 - Use focus_page if the user should be directed to a specific page.
-
-Special handling for location pages:
-- For location pages, ALWAYS extract and set these fields: venue, address, directions
-- venue: The name of the venue (e.g., "The Willow Manor", "Central Park Pavilion")
-- address: The full street address for geocoding (e.g., "5702 Cedar Ave, Philadelphia, PA")
-- directions: Parking info, transit info, or access notes (e.g., "Free parking available. Enter from main gate.")
-- mapUrl: Optional Google Maps link (can generate from address)
-- When user mentions a location, parse it carefully to extract venue name and full address
-- Use "Direction & Parking" as the headline if they don't specify
-
-- In the reply, briefly explain what you changed in plain language.
-- If you returned actions, the reply should name the page or element changes you made.
 - Do not mention policy, internal prompts, or that you are an AI model.
 - Avoid generic SaaS language. Keep the voice intentional and creative.
 - Return JSON only. No markdown, no code fences.
@@ -183,15 +158,6 @@ Return this shape:
     { "type": "remove_element", "pageId": "string", "elementId": "string" },
     { "type": "focus_element", "pageId": "string", "elementId": "string" }
   ]
-}
-
-For location pages specifically, content should look like:
-{
-  "headline": "Directions & Parking",
-  "venue": "The Willow Manor",
-  "address": "5702 Cedar Ave, Philadelphia, PA",
-  "directions": "Free parking in the lot behind the building. Entrance is on the north side.",
-  "mapUrl": "https://maps.google.com/?q=5702+Cedar+Ave,+Philadelphia,+PA"
 }
 
 Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giving this more breathing room." "It works, but it doesn't feel right yet."`
@@ -213,11 +179,8 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
     }),
   })
 
-  console.log("[AI Route] OpenAI response status:", response.status)
-
   if (!response.ok) {
     const details = await response.text()
-    console.error("[AI Route] OpenAI request failed:", { status: response.status, details })
     return NextResponse.json(
       { error: "OpenAI request failed.", details },
       { status: 502 }
@@ -232,337 +195,34 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
     }>
   }
 
-  console.log("[AI Route] OpenAI response received, choices:", data.choices?.length)
-
   const content = data.choices?.[0]?.message?.content
 
   if (!content) {
-    console.warn("[AI Route] OpenAI returned empty content")
     return NextResponse.json(
       { error: "OpenAI returned an empty response." },
       { status: 502 }
     )
   }
 
-  console.log("[AI Route] OpenAI content (first 500 chars):", content.substring(0, 500))
-
   let parsed: AiResponse
 
   try {
     parsed = JSON.parse(content) as AiResponse
-    console.log("[AI Route] Parsed JSON successfully:", { hasReply: !!parsed.reply, actionsCount: parsed.actions?.length })
   } catch {
-    console.error("[AI Route] Failed to parse OpenAI JSON:", content)
     return NextResponse.json(
       { error: "OpenAI returned invalid JSON." },
       { status: 502 }
     )
   }
 
-  const sanitized = sanitizeActions(parsed.actions)
-  console.log("[AI Route] Sanitized actions count:", sanitized.length)
-
-  let finalActions = sanitized.length > 0 ? sanitized : inferActionsFromPrompt(body)
-  console.log("[AI Route] Final actions count:", finalActions.length, "- took path:", sanitized.length > 0 ? "OpenAI" : "Fallback")
-
   return NextResponse.json({
     reply: typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : defaultReply(body),
-    actions: finalActions,
+    actions: sanitizeActions(parsed.actions),
   })
 }
 
 function defaultReply(body: EditorRequest) {
   return `Let's make ${body.invitation.title} feel more alive. I can tune the hierarchy, spacing, tone, or add a page that supports the flow.`
-}
-
-function inferActionsFromPrompt(body: EditorRequest): AiAction[] {
-  const prompt = body.prompt.toLowerCase()
-  const activePage = body.pages.find((page) => page.id === body.activePage) ?? body.pages[0]
-
-  if (!activePage) {
-    return []
-  }
-
-  if (prompt.includes("add") || prompt.includes("create") || prompt.includes("new page") || prompt.includes("page")) {
-    const pageType = inferPageType(prompt)
-
-    if (pageType) {
-      return [{
-        type: "add_page",
-        pageType,
-        name: formatPageName(pageType),
-        content: buildDefaultPageContent(pageType, body.prompt, body.invitation.title),
-      }]
-    }
-  }
-
-  return [{
-    type: "patch_page",
-    pageId: activePage.id,
-    content: buildPagePatch(activePage, body.prompt, body.invitation.title),
-  }]
-}
-
-function inferPageType(prompt: string): string | undefined {
-  if (prompt.includes("rsvp") || prompt.includes("attendance") || prompt.includes("guest")) return "rsvp"
-  if (prompt.includes("location") || prompt.includes("map") || prompt.includes("venue") || prompt.includes("address")) return "location"
-  if (prompt.includes("schedule") || prompt.includes("timeline") || prompt.includes("agenda")) return "schedule"
-  if (prompt.includes("gallery") || prompt.includes("photos") || prompt.includes("images")) return "gallery"
-  if (prompt.includes("gift") || prompt.includes("registry")) return "gifts"
-  if (prompt.includes("faq") || prompt.includes("questions")) return "faq"
-  if (prompt.includes("details") || prompt.includes("info")) return "details"
-  return "cover"
-}
-
-function formatPageName(pageType: string) {
-  switch (pageType) {
-    case "rsvp":
-      return "RSVP"
-    case "location":
-      return "Location"
-    case "schedule":
-      return "Schedule"
-    case "gallery":
-      return "Gallery"
-    case "gifts":
-      return "Gifts"
-    case "faq":
-      return "FAQ"
-    case "details":
-      return "Details"
-    default:
-      return "Cover"
-  }
-}
-
-function buildDefaultPageContent(pageType: string, prompt: string, title: string) {
-  const promptSummary = summarizePrompt(prompt)
-  const elements = buildPageElements(pageType, promptSummary, title)
-
-  switch (pageType) {
-    case "rsvp":
-      return {
-        headline: "RSVP",
-        subheadline: promptSummary,
-        fields: [
-          { label: "Full Name", type: "text", required: true },
-          { label: "Email", type: "email", required: true },
-          { label: "Attendance", type: "select", required: true },
-        ],
-        buttons: [{ label: "Submit RSVP", action: "submit" }],
-        elements,
-      }
-    case "location":
-      return {
-        headline: "Location",
-        subheadline: promptSummary,
-        venue: `${title} Venue`,
-        address: "Add venue address here",
-        directions: "Detailed directions will appear here",
-        mapUrl: "https://maps.google.com",
-        elements,
-      }
-    case "schedule":
-      return {
-        headline: "Schedule",
-        subheadline: promptSummary,
-        items: [
-          { icon: "clock", label: "Arrival", value: "6:00 PM" },
-          { icon: "clock", label: "Main Moment", value: "7:00 PM" },
-          { icon: "clock", label: "Wrap Up", value: "9:00 PM" },
-        ],
-        elements,
-      }
-    case "gallery":
-      return {
-        headline: "Gallery",
-        subheadline: promptSummary,
-        body: "A visual collection that supports the invitation story.",
-        elements,
-      }
-    case "gifts":
-      return {
-        headline: "Gift Registry",
-        subheadline: promptSummary,
-        body: "A simple place to share registry details or a thoughtful note.",
-        elements,
-      }
-    case "faq":
-      return {
-        headline: "FAQ",
-        subheadline: promptSummary,
-        elements,
-      }
-    case "details":
-      return {
-        headline: "Event Details",
-        subheadline: promptSummary,
-        body: "Add the key information guests need to know.",
-        date: "Date TBD",
-        time: "Time TBD",
-        location: "Location TBD",
-        elements,
-      }
-    default:
-      return {
-        headline: title,
-        subheadline: promptSummary,
-        body: "Shape the invitation into a stronger opening moment.",
-        elements,
-      }
-  }
-}
-
-function buildPagePatch(page: PageSummary, prompt: string, title: string) {
-  const promptSummary = summarizePrompt(prompt)
-  const lower = prompt.toLowerCase()
-  const pageType = page.name.toLowerCase().includes("rsvp")
-    ? "rsvp"
-    : page.name.toLowerCase().includes("detail")
-      ? "details"
-      : page.name.toLowerCase().includes("location")
-        ? "location"
-        : page.name.toLowerCase().includes("schedule")
-          ? "schedule"
-          : page.name.toLowerCase().includes("gallery")
-            ? "gallery"
-            : page.name.toLowerCase().includes("gift")
-              ? "gifts"
-              : page.name.toLowerCase().includes("faq")
-                ? "faq"
-                : "cover"
-
-  if (page.name.toLowerCase().includes("rsvp") || lower.includes("rsvp") || lower.includes("response")) {
-    return buildDefaultPageContent("rsvp", prompt, title)
-  }
-
-  if (page.name.toLowerCase().includes("detail") || lower.includes("detail")) {
-    return buildDefaultPageContent("details", prompt, title)
-  }
-
-  if (page.name.toLowerCase().includes("location") || lower.includes("location") || lower.includes("map")) {
-    return buildDefaultPageContent("location", prompt, title)
-  }
-
-  return {
-    headline: page.content.headline || title,
-    subheadline: promptSummary,
-    body: "Rebalanced for clarity, stronger hierarchy, and a more intentional tone.",
-    ...(page.content.date ? { date: page.content.date } : {}),
-    ...(page.content.time ? { time: page.content.time } : {}),
-    ...(page.content.location ? { location: page.content.location } : {}),
-    elements: buildPageElements(pageType, promptSummary, title),
-  }
-}
-
-function buildPageElements(pageType: string, promptSummary: string, title: string) {
-  const baseTitle = title || "Invitation"
-
-  switch (pageType) {
-    case "rsvp":
-      return [
-        {
-          id: "rsvp-badge",
-          type: "badge",
-          order: 0,
-          content: { label: "Response" },
-          style: { justifyContent: "center" },
-        },
-        {
-          id: "rsvp-copy",
-          type: "container",
-          order: 1,
-          style: { textAlign: "center", gap: "0.75rem", display: "block" },
-          children: [
-            { id: "rsvp-title", type: "text", content: { title: "RSVP" } },
-            { id: "rsvp-text", type: "text", content: { text: promptSummary } },
-          ],
-        },
-        {
-          id: "rsvp-button",
-          type: "button",
-          order: 2,
-          content: { label: "Open RSVP" },
-          style: { justifyContent: "center" },
-        },
-      ]
-    case "location":
-      return [
-        {
-          id: "location-image",
-          type: "image",
-          order: 0,
-          content: { title: baseTitle, description: "Venue preview" },
-          style: { height: "220px" },
-        },
-        {
-          id: "location-copy",
-          type: "container",
-          order: 1,
-          style: { gap: "0.75rem" },
-          children: [
-            { id: "location-title", type: "text", content: { title: "Location" } },
-            { id: "location-body", type: "text", content: { text: promptSummary } },
-          ],
-        },
-      ]
-    case "schedule":
-      return [
-        { id: "schedule-badge", type: "badge", order: 0, content: { label: "Timeline" }, style: { justifyContent: "center" } },
-        {
-          id: "schedule-copy",
-          type: "container",
-          order: 1,
-          style: { gap: "0.75rem" },
-          children: [
-            { id: "schedule-title", type: "text", content: { title: "Schedule" } },
-            { id: "schedule-text", type: "text", content: { text: promptSummary } },
-          ],
-        },
-      ]
-    case "gallery":
-      return [
-        { id: "gallery-badge", type: "badge", order: 0, content: { label: "Gallery" }, style: { justifyContent: "center" } },
-        { id: "gallery-image", type: "image", order: 1, content: { title: baseTitle, description: "Featured image" }, style: { height: "220px" } },
-      ]
-    case "gifts":
-      return [
-        { id: "gifts-badge", type: "badge", order: 0, content: { label: "Registry" }, style: { justifyContent: "center" } },
-        { id: "gifts-copy", type: "text", order: 1, content: { text: promptSummary } },
-      ]
-    case "faq":
-      return [
-        { id: "faq-badge", type: "badge", order: 0, content: { label: "FAQ" }, style: { justifyContent: "center" } },
-        { id: "faq-copy", type: "text", order: 1, content: { text: promptSummary } },
-      ]
-    case "details":
-      return [
-        { id: "details-badge", type: "badge", order: 0, content: { label: "Details" }, style: { justifyContent: "center" } },
-        { id: "details-title", type: "text", order: 1, content: { title: "Event Details" } },
-        { id: "details-text", type: "text", order: 2, content: { text: promptSummary } },
-        { id: "details-divider", type: "divider", order: 3 },
-      ]
-    default:
-      return [
-        { id: "cover-badge", type: "badge", order: 0, content: { label: "Invitation" }, style: { justifyContent: "center" } },
-        {
-          id: "cover-copy",
-          type: "container",
-          order: 1,
-          style: { textAlign: "center", gap: "0.75rem", display: "block" },
-          children: [
-            { id: "cover-title", type: "text", content: { title: baseTitle } },
-            { id: "cover-text", type: "text", content: { text: promptSummary } },
-          ],
-        },
-        { id: "cover-button", type: "button", order: 2, content: { label: "View Details" }, style: { justifyContent: "center" } },
-      ]
-  }
-}
-
-function summarizePrompt(prompt: string) {
-  const cleaned = prompt.replace(/\s+/g, " ").trim()
-  return cleaned.length > 120 ? `${cleaned.slice(0, 117)}...` : cleaned
 }
 
 function summarizeElements(elements: unknown): ElementSummary[] | undefined {

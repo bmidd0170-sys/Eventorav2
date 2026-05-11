@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { InvitationPageRenderer as SharedInvitationPageRenderer } from "@/components/invitation/invitation-page-renderer"
-import { 
+import {
   ChevronLeft,
   ChevronRight,
   Smartphone,
@@ -115,12 +115,12 @@ const defaultInvitation: InvitationData = {
 export default function PreviewPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  
+
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
   const [rsvpResponse, setRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
   const [invitation, setInvitation] = useState<InvitationData>(defaultInvitation)
-  
+
   // Load invitation data from localStorage (set by editor)
   useEffect(() => {
     const storedData = localStorage.getItem("eventora-preview-data")
@@ -133,7 +133,7 @@ export default function PreviewPage() {
       }
     }
   }, [])
-  
+
   const currentPage = invitation.pages[currentPageIndex]
   const totalPages = invitation.pages.length
 
@@ -154,8 +154,8 @@ export default function PreviewPage() {
       {/* Header */}
       <div className="h-14 shrink-0 border-b border-border/30 bg-card/50 backdrop-blur-sm flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={() => router.back()}
             className="text-muted-foreground hover:text-foreground"
@@ -171,17 +171,17 @@ export default function PreviewPage() {
         <div className="flex items-center gap-3">
           {/* Device toggle */}
           <div className="flex items-center bg-secondary rounded-lg p-0.5">
-            <Button 
-              variant={previewMode === "desktop" ? "secondary" : "ghost"} 
-              size="icon" 
+            <Button
+              variant={previewMode === "desktop" ? "secondary" : "ghost"}
+              size="icon"
               className="h-8 w-8"
               onClick={() => setPreviewMode("desktop")}
             >
               <Monitor className="w-4 h-4" />
             </Button>
-            <Button 
-              variant={previewMode === "mobile" ? "secondary" : "ghost"} 
-              size="icon" 
+            <Button
+              variant={previewMode === "mobile" ? "secondary" : "ghost"}
+              size="icon"
               className="h-8 w-8"
               onClick={() => setPreviewMode("mobile")}
             >
@@ -189,8 +189,8 @@ export default function PreviewPage() {
             </Button>
           </div>
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => router.back()}
             className="border-border/50"
@@ -202,12 +202,11 @@ export default function PreviewPage() {
 
       {/* Preview area */}
       <div className="flex-1 min-h-0 flex items-center justify-center p-4 md:p-8">
-        <div 
-          className={`h-full max-h-full flex flex-col transition-all duration-300 ${
-            previewMode === "mobile" 
-              ? "w-[375px]" 
+        <div
+          className={`h-full max-h-full flex flex-col transition-all duration-300 ${previewMode === "mobile"
+              ? "w-[375px]"
               : "w-full max-w-2xl"
-          }`}
+            }`}
         >
           {/* Phone frame for mobile */}
           <div className={`relative flex-1 min-h-0 ${previewMode === "mobile" ? "mx-3" : ""}`}>
@@ -221,15 +220,14 @@ export default function PreviewPage() {
             )}
 
             {/* Invitation content - scrollable */}
-            <div 
-              className={`h-full bg-card overflow-y-auto shadow-2xl ${
-                previewMode === "mobile" 
-                  ? "rounded-[2rem] relative z-10" 
+            <div
+              className={`h-full bg-card overflow-y-auto shadow-2xl ${previewMode === "mobile"
+                  ? "rounded-[2rem] relative z-10"
                   : "rounded-2xl"
-              }`}
+                }`}
             >
-              <SharedInvitationPageRenderer 
-                page={currentPage} 
+              <SharedInvitationPageRenderer
+                page={currentPage}
                 rsvpResponse={rsvpResponse}
                 setRsvpResponse={setRsvpResponse}
               />
@@ -241,8 +239,8 @@ export default function PreviewPage() {
       {/* Page navigation */}
       <div className="h-16 shrink-0 border-t border-border/30 bg-card/50 backdrop-blur-sm flex items-center justify-center px-4 relative">
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={goToPrevPage}
             disabled={currentPageIndex === 0}
@@ -257,17 +255,16 @@ export default function PreviewPage() {
               <button
                 key={page.id}
                 onClick={() => setCurrentPageIndex(index)}
-                className={`transition-all ${
-                  index === currentPageIndex
+                className={`transition-all ${index === currentPageIndex
                     ? "w-8 h-2 rounded-full gradient-primary"
                     : "w-2 h-2 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/50"
-                }`}
+                  }`}
               />
             ))}
           </div>
 
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="icon"
             onClick={goToNextPage}
             disabled={currentPageIndex === totalPages - 1}
@@ -290,11 +287,11 @@ export default function PreviewPage() {
   )
 }
 
-function InvitationPageRenderer({ 
-  page, 
-  rsvpResponse, 
-  setRsvpResponse 
-}: { 
+function InvitationPageRenderer({
+  page,
+  rsvpResponse,
+  setRsvpResponse
+}: {
   page: InvitationPage
   rsvpResponse: "attending" | "not-attending" | null
   setRsvpResponse: (response: "attending" | "not-attending" | null) => void
@@ -462,7 +459,7 @@ function CoverPage({ content }: { content: PageContent }) {
       {/* Decorative background */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-chart-3/20" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.08),transparent_70%)]" />
-      
+
       {/* Decorative elements */}
       <div className="absolute top-6 left-6 w-12 h-12 border border-primary/20 rounded-full" />
       <div className="absolute bottom-8 right-8 w-16 h-16 border border-accent/20 rounded-full" />
@@ -471,15 +468,15 @@ function CoverPage({ content }: { content: PageContent }) {
         <div className="w-14 h-14 mx-auto rounded-2xl gradient-primary flex items-center justify-center mb-6">
           <FileText className="w-7 h-7 text-white" />
         </div>
-        
+
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text text-balance">
           {content.headline || "You're Invited"}
         </h1>
-        
+
         <p className="text-lg text-muted-foreground">
           {content.subheadline || "to a Special Event"}
         </p>
-        
+
         {content.hostName && (
           <div className="pt-4">
             <p className="text-sm text-muted-foreground/80">Hosted by</p>
@@ -560,11 +557,11 @@ function DetailsPage({ content }: { content: PageContent }) {
   )
 }
 
-function RSVPPage({ 
-  content, 
-  rsvpResponse, 
-  setRsvpResponse 
-}: { 
+function RSVPPage({
+  content,
+  rsvpResponse,
+  setRsvpResponse
+}: {
   content: PageContent
   rsvpResponse: "attending" | "not-attending" | null
   setRsvpResponse: (response: "attending" | "not-attending" | null) => void
@@ -596,22 +593,20 @@ function RSVPPage({
       <div className="flex gap-3">
         <button
           onClick={() => setRsvpResponse("attending")}
-          className={`flex-1 py-3 rounded-xl border-2 transition-all ${
-            rsvpResponse === "attending"
+          className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "attending"
               ? "border-accent bg-accent/10 text-accent"
               : "border-border/50 hover:border-accent/50"
-          }`}
+            }`}
         >
           <p className="font-medium text-sm">Attending</p>
           <p className="text-xs text-muted-foreground mt-0.5">Count me in!</p>
         </button>
         <button
           onClick={() => setRsvpResponse("not-attending")}
-          className={`flex-1 py-3 rounded-xl border-2 transition-all ${
-            rsvpResponse === "not-attending"
+          className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "not-attending"
               ? "border-destructive bg-destructive/10 text-destructive"
               : "border-border/50 hover:border-destructive/50"
-          }`}
+            }`}
         >
           <p className="font-medium text-sm">Not Attending</p>
           <p className="text-xs text-muted-foreground mt-0.5">{"Can't make it"}</p>
@@ -649,7 +644,7 @@ function RSVPPage({
             </div>
           ))}
 
-          <Button 
+          <Button
             className="w-full gradient-primary border-0 text-white py-5"
             onClick={() => setSubmitted(true)}
           >
@@ -668,7 +663,7 @@ function RSVPPage({
               placeholder="Sorry I can't make it..."
             />
           </div>
-          <Button 
+          <Button
             variant="outline"
             className="w-full py-5"
             onClick={() => setSubmitted(true)}
@@ -731,7 +726,7 @@ function SchedulePage({ content }: { content: PageContent }) {
 
       <div className="space-y-3">
         {content.items?.map((item, index) => (
-          <div 
+          <div
             key={index}
             className="flex gap-3 p-3 bg-secondary/50 rounded-xl relative"
           >
@@ -739,11 +734,11 @@ function SchedulePage({ content }: { content: PageContent }) {
             {index < (content.items?.length || 0) - 1 && (
               <div className="absolute left-[1.85rem] top-14 bottom-0 w-px bg-border/50 -mb-3" />
             )}
-            
+
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0 relative z-10">
               <Clock className="w-4 h-4 text-white" />
             </div>
-            
+
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
                 <span className="text-xs font-medium text-primary">{item.time}</span>
@@ -766,7 +761,7 @@ function GalleryPage({ content }: { content: PageContent }) {
       <div className="text-center space-y-1">
         <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Gallery"}</h2>
       </div>
-      
+
       <div className="grid grid-cols-2 gap-2">
         {(content.images || [1, 2, 3, 4]).map((_, index) => (
           <div key={index} className="aspect-square bg-secondary/50 rounded-lg flex items-center justify-center">
@@ -785,7 +780,7 @@ function RegistryPage({ content }: { content: PageContent }) {
         <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Gift Registry"}</h2>
         {content.message && <p className="text-muted-foreground text-sm">{content.message}</p>}
       </div>
-      
+
       <div className="p-4 bg-secondary/50 rounded-xl text-center">
         <p className="font-medium text-sm mb-2">{content.registryName || "Our Registry"}</p>
         {content.registryUrl && (
@@ -807,7 +802,7 @@ function FAQPage({ content }: { content: PageContent }) {
       <div className="text-center space-y-1">
         <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "FAQ"}</h2>
       </div>
-      
+
       <div className="space-y-3">
         {(content.questions || [
           { question: "What should I wear?", answer: "Smart casual attire is recommended." },
@@ -830,7 +825,7 @@ function GenericPage({ content, type }: { content: PageContent; type: string }) 
         <h2 className="text-xl md:text-2xl font-semibold capitalize">{content.headline || type}</h2>
         {content.subheadline && <p className="text-muted-foreground text-sm">{content.subheadline}</p>}
       </div>
-      
+
       {content.description && (
         <p className="text-muted-foreground text-sm leading-relaxed">{content.description}</p>
       )}

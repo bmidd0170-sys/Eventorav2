@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
 export default function SignInPage() {
@@ -20,6 +20,14 @@ export default function SignInPage() {
     password: "",
     rememberMe: false,
   })
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      if (user) {
+        router.push('/home')
+      }
+    })
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,8 +46,7 @@ export default function SignInPage() {
   async function handleGoogleSignIn() {
     try {
       const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
-      router.push('/home')
+      await signInWithRedirect(auth, provider)
     } catch (err: any) {
       alert(err?.message || 'Google sign-in failed')
     }

@@ -180,11 +180,11 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
   })
 
   if (!response.ok) {
-    const details = await response.text()
-    return NextResponse.json(
-      { error: "OpenAI request failed.", details },
-      { status: 502 }
-    )
+    return NextResponse.json({
+      reply: defaultReply(body),
+      actions: [],
+      source: "fallback",
+    })
   }
 
   const data = (await response.json()) as {
@@ -198,10 +198,11 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
   const content = data.choices?.[0]?.message?.content
 
   if (!content) {
-    return NextResponse.json(
-      { error: "OpenAI returned an empty response." },
-      { status: 502 }
-    )
+    return NextResponse.json({
+      reply: defaultReply(body),
+      actions: [],
+      source: "fallback",
+    })
   }
 
   let parsed: AiResponse
@@ -209,10 +210,11 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
   try {
     parsed = JSON.parse(content) as AiResponse
   } catch {
-    return NextResponse.json(
-      { error: "OpenAI returned invalid JSON." },
-      { status: 502 }
-    )
+    return NextResponse.json({
+      reply: defaultReply(body),
+      actions: [],
+      source: "fallback",
+    })
   }
 
   return NextResponse.json({

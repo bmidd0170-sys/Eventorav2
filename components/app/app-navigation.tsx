@@ -3,10 +3,10 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { 
-  Sparkles, 
-  Home, 
-  LayoutDashboard, 
+import {
+  Sparkles,
+  Home,
+  LayoutDashboard,
   Settings,
   Plus
 } from "lucide-react"
@@ -40,11 +40,10 @@ export function AppNavigation() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-smooth ${
-                    isActive 
-                      ? "bg-secondary text-foreground" 
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-smooth ${isActive
+                      ? "bg-secondary text-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                  }`}
+                    }`}
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
@@ -55,7 +54,7 @@ export function AppNavigation() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
-           
+
           </div>
         </div>
       </div>
@@ -69,11 +68,10 @@ export function AppNavigation() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-1 px-3 py-1 text-xs transition-smooth ${
-                  isActive 
-                    ? "text-primary" 
+                className={`flex flex-col items-center gap-1 px-3 py-1 text-xs transition-smooth ${isActive
+                    ? "text-primary"
                     : "text-muted-foreground"
-                }`}
+                  }`}
               >
                 <item.icon className="w-5 h-5" />
                 {item.label}

@@ -16,7 +16,7 @@ export function HeroSection() {
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
       {/* Background gradient orb */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-gradient-to-br from-primary/30 via-accent/20 to-chart-3/20 blur-[120px] opacity-60" />
-      
+
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           {/* Left column - Text content */}
@@ -25,14 +25,14 @@ export function HeroSection() {
               <Sparkles className="w-3.5 h-3.5 text-primary" />
               <span className="text-xs font-medium text-primary">AI-Powered Creation</span>
             </div>
-            
+
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold leading-tight tracking-tight text-balance">
               Create Invitations That{" "}
               <span className="gradient-text">Feel Alive</span>
             </h1>
-            
+
             <p className="text-lg text-muted-foreground max-w-lg leading-relaxed">
-              Design stunning event invitations with AI that understands your vision. 
+              Design stunning event invitations with AI that understands your vision.
               No templates, just pure creative freedom powered by intelligent suggestions.
             </p>
 
@@ -65,7 +65,7 @@ export function HeroSection() {
               <div className="relative bg-card rounded-2xl border border-border/50 p-6 glow">
                 <InvitationPreview />
               </div>
-              
+
               {/* Floating AI suggestion */}
               <div className="absolute -left-4 top-1/4 bg-card rounded-xl border border-border/50 p-3 shadow-xl animate-float">
                 <div className="flex items-center gap-2">

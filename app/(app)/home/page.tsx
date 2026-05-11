@@ -4,9 +4,9 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { 
-  ArrowUp, 
-  Paperclip, 
+import {
+  ArrowUp,
+  Paperclip,
   Sparkles,
   Calendar,
   Users,
@@ -163,14 +163,13 @@ export default function HomePage() {
 
           {/* Prompt input area */}
           <form onSubmit={handleSubmit}>
-            <div 
+            <div
               onDrop={onDrop}
               onDragOver={onDragOver}
-              className={`relative bg-card rounded-2xl border transition-all duration-200 ${
-                isFocused 
-                  ? "border-primary/50 shadow-lg shadow-primary/5" 
+              className={`relative bg-card rounded-2xl border transition-all duration-200 ${isFocused
+                  ? "border-primary/50 shadow-lg shadow-primary/5"
                   : "border-border/50"
-              }`}
+                }`}
             >
               <textarea
                 ref={inputRef}
@@ -183,7 +182,7 @@ export default function HomePage() {
                 rows={3}
                 className="w-full bg-transparent px-4 pt-4 pb-4 text-base resize-none focus:outline-none placeholder:text-muted-foreground/60"
               />
-              
+
               {/* Attachment previews section - text format below text */}
               {attachments.length > 0 && (
                 <div className="border-t border-border/30 px-4 py-2 flex flex-wrap gap-2 items-center">
@@ -213,7 +212,7 @@ export default function HomePage() {
                   ))}
                 </div>
               )}
-              
+
               {/* Input actions */}
               <div className="flex items-center justify-between px-4 py-3 border-t border-border/30">
                 <div ref={dropToggleRef} className="flex items-center gap-2">
@@ -254,16 +253,15 @@ export default function HomePage() {
                     </div>
                   )}
                 </div>
-                
-                <Button 
-                  type="submit" 
-                  size="icon" 
+
+                <Button
+                  type="submit"
+                  size="icon"
                   disabled={!inputValue.trim()}
-                  className={`h-8 w-8 rounded-lg transition-all ${
-                    inputValue.trim() 
-                      ? "gradient-primary border-0 text-white" 
+                  className={`h-8 w-8 rounded-lg transition-all ${inputValue.trim()
+                      ? "gradient-primary border-0 text-white"
                       : "bg-secondary text-muted-foreground"
-                  }`}
+                    }`}
                 >
                   <ArrowUp className="w-4 h-4" />
                 </Button>
@@ -296,30 +294,29 @@ export default function HomePage() {
               View all
             </Link>
           </div>
-          
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {recentProjects.map((project) => (
-              <Link 
-                key={project.id} 
+              <Link
+                key={project.id}
                 href={`/editor?project=${project.id}`}
                 className="group"
               >
                 <div className="bg-card rounded-xl border border-border/50 overflow-hidden hover:border-primary/30 transition-smooth">
                   {/* Thumbnail */}
-                  <div className={`h-24 ${
-                    project.thumbnail === "gradient-1" 
+                  <div className={`h-24 ${project.thumbnail === "gradient-1"
                       ? "bg-gradient-to-br from-primary/30 to-accent/20"
                       : project.thumbnail === "gradient-2"
                         ? "bg-gradient-to-br from-accent/30 to-chart-3/20"
                         : "bg-gradient-to-br from-chart-3/30 to-primary/20"
-                  }`}>
+                    }`}>
                     <div className="w-full h-full flex items-center justify-center">
                       <div className="w-16 h-20 bg-card/80 rounded-lg shadow-lg flex items-center justify-center">
                         <Sparkles className="w-5 h-5 text-muted-foreground" />
                       </div>
                     </div>
                   </div>
-                  
+
                   {/* Info */}
                   <div className="p-3">
                     <h4 className="font-medium text-sm truncate group-hover:text-primary transition-colors">

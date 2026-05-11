@@ -2,12 +2,12 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { 
-  Plus, 
-  Calendar, 
-  Users, 
+import { invitations, type InvitationSummary } from "@/lib/invitations"
+import {
+  Plus,
+  Calendar,
+  Users,
   Mail,
   Clock,
   MoreHorizontal,
@@ -31,130 +31,10 @@ const stats = [
   { label: "Upcoming", value: "4", icon: Clock, color: "text-chart-4" },
 ]
 
-const events = [
-  {
-    id: "1",
-    title: "Summer Garden Party",
-    description: "An elegant outdoor celebration",
-    date: "Jun 15, 2026",
-    time: "6:00 PM",
-    guests: { total: 50, confirmed: 45, pending: 5 },
-    status: "active",
-    reminder: true,
-    color: "from-accent/30 via-accent/10 to-transparent",
-  },
-  {
-    id: "2",
-    title: "Product Launch Event",
-    description: "Introducing our newest innovation",
-    date: "Jul 8, 2026",
-    time: "2:00 PM",
-    guests: { total: 150, confirmed: 120, pending: 30 },
-    status: "active",
-    reminder: true,
-    color: "from-primary/30 via-primary/10 to-transparent",
-  },
-  {
-    id: "3",
-    title: "Annual Team Celebration",
-    description: "Celebrating another great year",
-    date: "Aug 20, 2026",
-    time: "7:00 PM",
-    guests: { total: 100, confirmed: 80, pending: 12 },
-    status: "draft",
-    reminder: false,
-    color: "from-chart-3/30 via-chart-3/10 to-transparent",
-  },
-  {
-    id: "4",
-    title: "Wedding Anniversary",
-    description: "25 years of love and laughter",
-    date: "Sep 5, 2026",
-    time: "5:00 PM",
-    guests: { total: 75, confirmed: 60, pending: 10 },
-    status: "active",
-    reminder: true,
-    color: "from-chart-4/30 via-chart-4/10 to-transparent",
-  },
-  {
-    id: "5",
-    title: "Charity Gala",
-    description: "Making a difference together",
-    date: "Oct 12, 2026",
-    time: "7:30 PM",
-    guests: { total: 200, confirmed: 150, pending: 35 },
-    status: "draft",
-    reminder: false,
-    color: "from-chart-5/30 via-chart-5/10 to-transparent",
-  },
-  {
-    id: "6",
-    title: "Holiday Party",
-    description: "Festive cheer and good times",
-    date: "Dec 20, 2026",
-    time: "6:00 PM",
-    guests: { total: 80, confirmed: 55, pending: 20 },
-    status: "active",
-    reminder: true,
-    color: "from-accent/30 via-primary/10 to-transparent",
-  },
-]
-
 export default function DashboardPage() {
-  const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
 
-  const handleViewEvent = (event: typeof events[0]) => {
-    // Create preview data based on the event
-    const previewData = {
-      id: event.id,
-      title: event.title,
-      theme: {
-        primaryColor: "from-accent via-primary to-chart-3",
-        backgroundColor: "bg-card",
-      },
-      pages: [
-        {
-          id: "cover",
-          type: "cover",
-          content: {
-            headline: "You're Invited",
-            subheadline: event.title,
-            hostName: "Event Host",
-          }
-        },
-        {
-          id: "details",
-          type: "details",
-          content: {
-            headline: "Event Details",
-            date: event.date,
-            time: event.time,
-            location: "Event Venue",
-            address: "123 Event Street",
-            description: event.description,
-          }
-        },
-        {
-          id: "rsvp",
-          type: "rsvp",
-          content: {
-            headline: "RSVP",
-            subheadline: "Please let us know if you can make it",
-            fields: [
-              { label: "Full Name", type: "text", required: true },
-              { label: "Email", type: "email", required: true },
-              { label: "Number of Guests", type: "select", options: ["1", "2", "3", "4"], required: true },
-            ]
-          }
-        }
-      ]
-    }
-    localStorage.setItem("eventora-preview-data", JSON.stringify(previewData))
-    router.push("/preview")
-  }
-  
-  const filteredEvents = events.filter(event =>
+  const filteredEvents = invitations.filter(event =>
     event.title.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -219,7 +99,7 @@ export default function DashboardPage() {
   )
 }
 
-function EventCard({ event }: { event: typeof events[0] }) {
+function EventCard({ event }: { event: InvitationSummary }) {
   const confirmRate = Math.round((event.guests.confirmed / event.guests.total) * 100)
 
   return (
@@ -231,11 +111,10 @@ function EventCard({ event }: { event: typeof events[0] }) {
         </div>
         {/* Status badge */}
         <div className="absolute top-3 left-3">
-          <span className={`px-2 py-1 rounded-md text-xs font-medium ${
-            event.status === "active" 
-              ? "bg-accent/20 text-accent" 
+          <span className={`px-2 py-1 rounded-md text-xs font-medium ${event.status === "active"
+              ? "bg-accent/20 text-accent"
               : "bg-muted text-muted-foreground"
-          }`}>
+            }`}>
             {event.status === "active" ? "Active" : "Draft"}
           </span>
         </div>
@@ -248,9 +127,11 @@ function EventCard({ event }: { event: typeof events[0] }) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleViewEvent(event)}>
+              <DropdownMenuItem asChild>
+                <Link href={`/preview?event=${event.id}`}>
                   <Eye className="w-4 h-4 mr-2" />
                   View
+                </Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href={`/editor?event=${event.id}`}>
@@ -292,7 +173,7 @@ function EventCard({ event }: { event: typeof events[0] }) {
             <span className="font-medium">{event.guests.confirmed}/{event.guests.total}</span>
           </div>
           <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full gradient-primary rounded-full transition-all duration-500"
               style={{ width: `${confirmRate}%` }}
             />

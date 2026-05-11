@@ -147,6 +147,7 @@ export default function SignInPage() {
                 <Input
                   id="email"
                   type="email"
+                  autoComplete="email"
                   placeholder="you@example.com"
                   className="pl-10 h-12"
                   value={formData.email}
@@ -168,6 +169,7 @@ export default function SignInPage() {
                 <Input
                   id="password"
                   type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
                   placeholder="Enter your password"
                   className="pl-10 pr-10 h-12"
                   value={formData.password}

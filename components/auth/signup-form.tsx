@@ -55,6 +55,21 @@ export function SignupForm() {
         title: 'Success',
         description: 'Account created successfully',
       });
+      try {
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: values.email,
+            subject: 'Welcome to Eventora!',
+            text: `Welcome to Eventora! We're excited to help you create beautiful event invitations. Start by creating your first event.`,
+            html: `<p>Welcome to <strong>Eventora</strong>! We're excited to help you create beautiful event invitations.</p><p>Start by creating your first event.</p>`,
+            fromName: 'Eventora',
+          }),
+        })
+      } catch (e) {
+        console.warn('Failed to send welcome email', e)
+      }
       router.push('/(app)/dashboard');
     } catch (error: any) {
       const errorMessage = error?.message || 'Failed to create account';

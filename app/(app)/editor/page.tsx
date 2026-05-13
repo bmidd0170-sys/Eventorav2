@@ -1250,9 +1250,23 @@ export default function EditorPage() {
                   if (typeof window !== "undefined") {
                     localStorage.setItem("eventora-last-published-event-id", eventId)
                   }
-                  const title = encodeURIComponent(eventTitle ?? currentInvitation.title ?? "Untitled Event")
+                  const title = eventTitle ?? currentInvitation.title ?? "Untitled Event"
                   const pagesCount = pages.length
-                  router.push(`/publish?event=${encodeURIComponent(eventId)}&title=${title}&pages=${pagesCount}`)
+                  const detailsPage = pages.find((page) => page.content.date || page.content.time) ?? currentPage
+                  const nextParams = new URLSearchParams()
+                  nextParams.set("event", eventId)
+                  nextParams.set("title", title)
+                  nextParams.set("pages", String(pagesCount))
+
+                  if (detailsPage?.content?.date) {
+                    nextParams.set("date", detailsPage.content.date)
+                  }
+
+                  if (detailsPage?.content?.time) {
+                    nextParams.set("time", detailsPage.content.time)
+                  }
+
+                  router.push(`/publish/confirm?${nextParams.toString()}`)
                 }
               } catch (error) {
                 console.error("Failed to publish:", error)

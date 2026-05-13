@@ -46,18 +46,21 @@ const mockContacts: Contact[] = [
 ]
 
 export default function PublishPage() {
-  const [activeMethod, setActiveMethod] = useState<InviteMethod>("link")
-  const [linkCopied, setLinkCopied] = useState(false)
-  const [isPublished, setIsPublished] = useState(false)
   const searchParams = useSearchParams()
   const eventParam = searchParams?.get("event")
   const projectParam = searchParams?.get("project")
   const titleParam = searchParams?.get("title")
   const pagesParam = searchParams?.get("pages")
-  const titleFromParams = titleParam ? decodeURIComponent(titleParam) : "Summer Party 2026"
+  const dateParam = searchParams?.get("date")
+  const timeParam = searchParams?.get("time")
+  const shareMode = searchParams?.get("published") === "true" || searchParams?.get("step") === "share"
+  const titleFromParams = titleParam ?? "Summer Party 2026"
   const pagesCount = pagesParam ? Number(pagesParam) : 3
   const [resolvedEventId, setResolvedEventId] = useState((eventParam || projectParam || "").trim())
   const invitePath = resolvedEventId ? `/i/${encodeURIComponent(resolvedEventId)}` : ""
+  const [activeMethod, setActiveMethod] = useState<InviteMethod>("link")
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [isPublished, setIsPublished] = useState(shareMode)
   const [inviteLink, setInviteLink] = useState(invitePath)
   const [emailAddresses, setEmailAddresses] = useState<string[]>([])
   const [newEmail, setNewEmail] = useState("")
@@ -65,6 +68,10 @@ export default function PublishPage() {
   const [linkVisibility, setLinkVisibility] = useState<"public" | "private">("public")
   const [emailSubject, setEmailSubject] = useState("You're Invited!")
   const [emailMessage, setEmailMessage] = useState("I'd love for you to join me at this special event. Click the link below to view the invitation and RSVP.")
+
+  useEffect(() => {
+    setIsPublished(shareMode)
+  }, [shareMode])
 
   useEffect(() => {
     const eventIdFromParams = (eventParam || projectParam || "").trim()
@@ -136,6 +143,37 @@ export default function PublishPage() {
     setContacts(contacts.map(c => 
       c.id === id ? { ...c, selected: !c.selected } : c
     ))
+  }
+
+  const handleSendEmails = async () => {
+    if (!emailAddresses.length || !inviteLink) return
+    
+    const emailsToSend = activeMethod === "connections" 
+      ? contacts.filter(c => c.selected).map(c => c.email)
+      : emailAddresses
+
+    try {
+      for (const email of emailsToSend) {
+        const htmlEmail = `
+          <p>${emailMessage.replace(/\n/g, '<br>')}</p>
+          <p><a href="${inviteLink}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">View Invitation</a></p>
+        `
+        
+        await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: email,
+            subject: emailSubject,
+            text: `${emailMessage}\n\n${inviteLink}`,
+            html: htmlEmail,
+            fromName: titleFromParams,
+          }),
+        })
+      }
+    } catch (error) {
+      console.error('Failed to send invitations:', error)
+    }
   }
 
   const selectedContacts = contacts.filter(c => c.selected)
@@ -237,6 +275,13 @@ export default function PublishPage() {
           <div>
             <h2 className="font-semibold text-lg mb-1">Your invitation is live!</h2>
             <p className="text-muted-foreground text-sm">Choose how you want to share it with your guests.</p>
+            {(dateParam || timeParam) && (
+              <p className="text-xs text-muted-foreground mt-2">
+                {dateParam ?? ""}
+                {dateParam && timeParam ? " • " : ""}
+                {timeParam ?? ""}
+              </p>
+            )}
           </div>
         </div>
 
@@ -414,6 +459,7 @@ export default function PublishPage() {
               <Button 
                 className="w-full gradient-primary border-0 text-white"
                 disabled={emailAddresses.length === 0}
+                onClick={handleSendEmails}
               >
                 <Send className="w-4 h-4 mr-2" />
                 Send {emailAddresses.length > 0 ? `to ${emailAddresses.length} recipient${emailAddresses.length > 1 ? 's' : ''}` : 'Invitations'}
@@ -470,6 +516,7 @@ export default function PublishPage() {
                 <Button 
                   className="gradient-primary border-0 text-white"
                   disabled={selectedContacts.length === 0}
+                  onClick={handleSendEmails}
                 >
                   <Send className="w-4 h-4 mr-2" />
                   Send Invitations

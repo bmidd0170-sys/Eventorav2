@@ -6,6 +6,7 @@ type ReqBody = {
   subject: string
   text?: string
   html?: string
+  fromName?: string
 }
 
 const transporter = nodemailer.createTransport({
@@ -26,9 +27,11 @@ export async function POST(req: Request) {
     }
 
     const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'no-reply@example.com'
+    const fromName = body.fromName || process.env.SMTP_FROM_NAME || 'Eventora'
+    const fromFormatted = `"${fromName}" <${from}>`
 
     await transporter.sendMail({
-      from,
+      from: fromFormatted,
       to: body.to,
       subject: body.subject,
       text: body.text,

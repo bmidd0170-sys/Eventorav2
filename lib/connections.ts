@@ -105,6 +105,7 @@ export async function sendConnectionRequest(
                 subject: `${fromUserName} sent you a connection request on Eventora`,
                 text: `${fromUserName} (${fromUserEmail}) wants to connect with you on Eventora.`,
                 html: `<p><strong>${fromUserName}</strong> (${fromUserEmail}) wants to connect with you on <strong>Eventora</strong>.</p>`,
+                fromName: 'Eventora',
             })
         } catch (e) {
             console.warn('Failed to send connection request email', e)
@@ -163,12 +164,14 @@ export async function acceptConnectionRequest(
                     subject: `You accepted ${fromUserName}'s connection request`,
                     text: `You accepted ${fromUserName}'s connection request on Eventora.`,
                     html: `<p>You accepted <strong>${fromUserName}</strong>'s connection request on <strong>Eventora</strong>.</p>`,
+                    fromName: 'Eventora',
                 }),
                 sendEmailIfAllowed(fromUserId, 'emailConnectionsAccepted', {
                     to: fromUserEmail,
                     subject: `${toUserName} accepted your connection request`,
                     text: `${toUserName} accepted your connection request on Eventora.`,
                     html: `<p><strong>${toUserName}</strong> accepted your connection request on <strong>Eventora</strong>.</p>`,
+                    fromName: 'Eventora',
                 }),
             ])
         } catch (e) {

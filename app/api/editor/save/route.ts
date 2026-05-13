@@ -70,7 +70,18 @@ export async function POST(req: NextRequest) {
 
     // Create or update the event with upsert using database user ID
     // Store pages and messages together in pagesData as an object
-    const pagesData = { pages: body.pages as any, messages: body.messages ?? [] } as any
+    // Transform pages to include 'type' field extracted from id
+    const transformedPages = (body.pages as any[]).map((page: any) => {
+      // Extract page type from id (format: "type-timestamp")
+      const pageType = typeof page.id === 'string' ? page.id.split('-')[0] : 'cover'
+      return {
+        ...page,
+        type: pageType,
+        // Ensure content is an object
+        content: page.content || {}
+      }
+    })
+    const pagesData = { pages: transformedPages, messages: body.messages ?? [] } as any
     const titleToSave = (body.title && typeof body.title === 'string') ? body.title : "Untitled Event"
     const updatedEvent = await prisma.event.upsert({
       where: { id: body.invitationId },

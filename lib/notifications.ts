@@ -51,7 +51,7 @@ export async function saveUserNotificationSettings(userId: string, settings: Par
   }
 }
 
-export async function sendEmailIfAllowed(userId: string, settingKey: keyof NotificationSettings, mail: { to: string; subject: string; text?: string; html?: string }) {
+export async function sendEmailIfAllowed(userId: string, settingKey: keyof NotificationSettings, mail: { to: string; subject: string; text?: string; html?: string; fromName?: string }) {
   const settings = await getUserNotificationSettings(userId)
   if (!settings[settingKey]) return false
 
@@ -59,7 +59,7 @@ export async function sendEmailIfAllowed(userId: string, settingKey: keyof Notif
     await fetch('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: mail.to, subject: mail.subject, text: mail.text, html: mail.html }),
+      body: JSON.stringify({ to: mail.to, subject: mail.subject, text: mail.text, html: mail.html, fromName: mail.fromName }),
     })
     return true
   } catch (err) {

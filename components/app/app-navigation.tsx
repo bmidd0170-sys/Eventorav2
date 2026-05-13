@@ -41,8 +41,8 @@ export function AppNavigation() {
                   key={item.href}
                   href={item.href}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-smooth ${isActive
-                      ? "bg-secondary text-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                    ? "bg-secondary text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                     }`}
                 >
                   <item.icon className="w-4 h-4" />
@@ -69,8 +69,8 @@ export function AppNavigation() {
                 key={item.href}
                 href={item.href}
                 className={`flex flex-col items-center gap-1 px-3 py-1 text-xs transition-smooth ${isActive
-                    ? "text-primary"
-                    : "text-muted-foreground"
+                  ? "text-primary"
+                  : "text-muted-foreground"
                   }`}
               >
                 <item.icon className="w-5 h-5" />

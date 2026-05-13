@@ -202,21 +202,21 @@ export default function GetStartedPage() {
                           <div
                             key={level}
                             className={`h-1 flex-1 rounded-full transition-colors ${level <= strength.level
-                                ? strength.level === 1
-                                  ? "bg-red-500"
-                                  : strength.level === 2
-                                    ? "bg-yellow-500"
-                                    : "bg-green-500"
-                                : "bg-muted"
+                              ? strength.level === 1
+                                ? "bg-red-500"
+                                : strength.level === 2
+                                  ? "bg-yellow-500"
+                                  : "bg-green-500"
+                              : "bg-muted"
                               }`}
                           />
                         ))}
                       </div>
                       <p className={`text-xs ${strength.level === 1
-                          ? "text-red-500"
-                          : strength.level === 2
-                            ? "text-yellow-500"
-                            : "text-green-500"
+                        ? "text-red-500"
+                        : strength.level === 2
+                          ? "text-yellow-500"
+                          : "text-green-500"
                         }`}>
                         {strength.text}
                       </p>
@@ -285,8 +285,8 @@ export default function GetStartedPage() {
                       type="button"
                       onClick={() => setSelectedOption(option.id)}
                       className={`w-full p-4 rounded-xl border transition-all text-left group ${isSelected
-                          ? "border-primary bg-primary/10"
-                          : "border-border hover:border-primary/50 hover:bg-primary/5"
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:border-primary/50 hover:bg-primary/5"
                         }`}
                     >
                       <div className="flex items-center justify-between">

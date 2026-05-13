@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef } from "react"
+import { useState } from "react"
 
 interface GoogleMapProps {
     address?: string
@@ -15,9 +16,6 @@ declare global {
                 Map: any
                 Geocoder: any
                 GeocoderStatus: any
-                marker: {
-                    AdvancedMarkerElement: any
-                }
             }
         }
     }
@@ -26,6 +24,7 @@ declare global {
 export function GoogleMap({ address, venue, className = "w-full h-full" }: GoogleMapProps) {
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstanceRef = useRef<any | null>(null)
+    const [showPin, setShowPin] = useState(false)
 
     useEffect(() => {
         if (!mapRef.current || !window.google) return
@@ -47,29 +46,26 @@ export function GoogleMap({ address, venue, className = "w-full h-full" }: Googl
             if (status === window.google.maps.GeocoderStatus.OK && results?.[0]) {
                 const location = results[0].geometry.location
                 map.setCenter(location)
-
-                // Use AdvancedMarkerElement instead of deprecated Marker
-                try {
-                    const AdvancedMarkerElement = window.google.maps.marker.AdvancedMarkerElement
-                    if (AdvancedMarkerElement) {
-                        new AdvancedMarkerElement({
-                            map,
-                            position: location,
-                            title: venue || address,
-                        })
-                    } else {
-                        // Fallback to Marker if AdvancedMarkerElement not available
-                        console.warn("AdvancedMarkerElement not available, falling back to Marker")
-                    }
-                } catch (e) {
-                    console.warn("Error creating advanced marker:", e)
-                }
+                setShowPin(true)
             } else {
                 // Default to NYC if geocoding fails
                 map.setCenter({ lat: 40.7128, lng: -74.006 })
+                setShowPin(false)
             }
         })
     }, [address, venue])
 
-    return <div ref={mapRef} className={className} />
+    return (
+        <div className="relative overflow-hidden" aria-label={venue || address || "Location map"}>
+            <div ref={mapRef} className={className} />
+            {showPin && (
+                <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-full">
+                    <div className="flex flex-col items-center">
+                        <div className="h-4 w-4 rounded-full bg-primary shadow-lg shadow-primary/30" />
+                        <div className="h-10 w-1 rounded-full bg-primary/25" />
+                    </div>
+                </div>
+            )}
+        </div>
+    )
 }

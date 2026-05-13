@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { sendEmailIfAllowed } from '@/lib/notifications'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -48,6 +49,20 @@ export function LoginForm() {
         title: 'Success',
         description: 'Logged in successfully',
       });
+      try {
+        const uid = auth.currentUser?.uid
+        if (uid) {
+          await sendEmailIfAllowed(uid, 'emailSecurity', {
+            to: values.email,
+            subject: 'New sign-in to your Eventora account',
+            text: `We detected a sign-in to your Eventora account. If this wasn't you, please secure your account.`,
+            html: `<p>We detected a sign-in to your <strong>Eventora</strong> account. If this wasn't you, please secure your account.</p>`,
+          })
+        }
+      } catch (e) {
+        console.warn('Failed to send login email', e)
+      }
+
       router.push('/(app)/dashboard');
     } catch (error: any) {
       const errorMessage = error?.message || 'Failed to log in';

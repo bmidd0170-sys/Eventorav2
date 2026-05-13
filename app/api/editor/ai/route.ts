@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 type EditorRequest = {
   prompt: string
+  images?: Array<{ name: string; data: string; type: string }>
   invitation: {
     id: string
     title: string
@@ -88,7 +89,7 @@ type AiResponse = {
 
 export const runtime = "nodejs"
 
-const defaultModel = process.env.OPENAI_MODEL || "gpt-4.1-mini"
+const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY
@@ -142,6 +143,7 @@ Behavior rules:
 - Element types you can use: container, text, image, button, badge, divider, spacer.
 - Use containers to group nested elements with children and use order to control stacking.
 - Use focus_page if the user should be directed to a specific page.
+- **Image handling**: When users share images, analyze them for design inspiration, color schemes, layout ideas, or specific elements they want to incorporate. Suggest concrete design changes based on what you see. When user asks to add images but does NOT specify a page location, automatically add them to the Photo Gallery page. If no gallery page exists, create one first using add_page with pageType "gallery", then add images by creating image elements or patching the images array.
 - Do not mention policy, internal prompts, or that you are an AI model.
 - Avoid generic SaaS language. Keep the voice intentional and creative.
 - Return JSON only. No markdown, no code fences.
@@ -162,6 +164,33 @@ Return this shape:
 
 Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giving this more breathing room." "It works, but it doesn't feel right yet."`
 
+  // Build user message with images if present
+  type MessageContent = string | Array<Record<string, unknown>>
+
+  let userMessageContent: MessageContent = JSON.stringify(context, null, 2)
+
+  if (body.images && body.images.length > 0) {
+    const imageContent: Array<Record<string, unknown>> = [
+      {
+        type: "text",
+        text: userMessageContent,
+      },
+    ]
+
+    for (const image of body.images) {
+      imageContent.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: image.type,
+          data: image.data,
+        },
+      })
+    }
+
+    userMessageContent = imageContent
+  }
+
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -174,7 +203,10 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: JSON.stringify(context, null, 2) },
+        { 
+          role: "user", 
+          content: userMessageContent,
+        },
       ],
     }),
   })

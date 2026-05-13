@@ -1,0 +1,147 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String    @id @default(cuid())
+  firebaseUid      String    @unique
+  email            String    @unique
+  displayName      String?
+  photoUrl         String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  events           Event[]
+  invitations      Invitation[]
+  guestLists       GuestList[]
+
+  @@index([firebaseUid])
+  @@index([email])
+}
+
+model Event {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title            String
+  description      String?
+  startDate        DateTime
+  endDate          DateTime
+  location         String?
+  imageUrl         String?
+  
+  status           String    @default("draft") // draft, published, completed, cancelled
+  pagesData        Json?     // Stores invitation pages structure as JSON
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  invitations      Invitation[]
+  guestLists       GuestList[]
+  eventSettings    EventSettings?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model EventSettings {
+  id               String    @id @default(cuid())
+  eventId          String    @unique
+  event            Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  allowGuestList   Boolean   @default(true)
+  allowInvitations Boolean   @default(true)
+  customCss        String?
+  theme            String?   // light, dark, custom
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([eventId])
+}
+
+model Invitation {
+  id               String    @id @default(cuid())
+  eventId          String
+  event            Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  
+  userId           String?
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  guestEmail       String
+  guestName        String?
+  
+  status           String    @default("pending") // pending, accepted, declined
+  token            String    @unique
+  
+  sentAt           DateTime?
+  respondedAt      DateTime?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([eventId, guestEmail])
+  @@index([eventId])
+  @@index([userId])
+  @@index([guestEmail])
+  @@index([token])
+  @@index([status])
+}
+
+model GuestList {
+  id               String    @id @default(cuid())
+  eventId          String
+  event            Event     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name             String
+  entries          GuestListEntry[]
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([eventId])
+  @@index([userId])
+}
+
+model GuestListEntry {
+  id               String    @id @default(cuid())
+  guestListId      String
+  guestList        GuestList @relation(fields: [guestListId], references: [id], onDelete: Cascade)
+  
+  name             String
+  email            String?
+  phone            String?
+  status           String    @default("pending") // pending, attending, not-attending
+  notes            String?
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([guestListId])
+  @@index([email])
+}
+
+model Connection {
+  id               String    @id @default(cuid())
+  userId           String    // Firebase UID, not a foreign key
+  
+  type             String    // slack, zapier, etc
+  config           String    // JSON stringified config
+  
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([type])
+}

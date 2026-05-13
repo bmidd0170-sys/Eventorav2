@@ -1,0 +1,12 @@
+app/api/editor/save/route.ts(83,9): error TS2322: Type '{ pages: any; messages: unknown[]; }' is not assignable to type 'NullableJsonNullValueInput | InputJsonValue | undefined'.
+  Type '{ pages: any; messages: unknown[]; }' is not assignable to type 'InputJsonObject'.
+    Property 'messages' is incompatible with index signature.
+      Type 'unknown[]' is not assignable to type 'InputJsonValue | null | undefined'.
+        Type 'unknown[]' is not assignable to type 'InputJsonObject'.
+          Index signature for type 'string' is missing in type 'unknown[]'.
+app/api/editor/save/route.ts(88,9): error TS2322: Type '{ pages: any; messages: unknown[]; }' is not assignable to type 'NullableJsonNullValueInput | InputJsonValue | undefined'.
+  Type '{ pages: any; messages: unknown[]; }' is not assignable to type 'InputJsonObject'.
+    Property 'messages' is incompatible with index signature.
+      Type 'unknown[]' is not assignable to type 'InputJsonValue | null | undefined'.
+        Type 'unknown[]' is not assignable to type 'InputJsonObject'.
+          Index signature for type 'string' is missing in type 'unknown[]'.

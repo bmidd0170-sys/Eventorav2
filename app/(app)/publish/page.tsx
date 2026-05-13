@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,7 +49,16 @@ export default function PublishPage() {
   const [activeMethod, setActiveMethod] = useState<InviteMethod>("link")
   const [linkCopied, setLinkCopied] = useState(false)
   const [isPublished, setIsPublished] = useState(false)
-  const [inviteLink] = useState("https://eventora.app/i/summer-party-2026")
+  const searchParams = useSearchParams()
+  const eventParam = searchParams?.get("event")
+  const projectParam = searchParams?.get("project")
+  const titleParam = searchParams?.get("title")
+  const pagesParam = searchParams?.get("pages")
+  const titleFromParams = titleParam ? decodeURIComponent(titleParam) : "Summer Party 2026"
+  const pagesCount = pagesParam ? Number(pagesParam) : 3
+  const [resolvedEventId, setResolvedEventId] = useState((eventParam || projectParam || "").trim())
+  const invitePath = resolvedEventId ? `/i/${encodeURIComponent(resolvedEventId)}` : ""
+  const [inviteLink, setInviteLink] = useState(invitePath)
   const [emailAddresses, setEmailAddresses] = useState<string[]>([])
   const [newEmail, setNewEmail] = useState("")
   const [contacts, setContacts] = useState<Contact[]>(mockContacts)
@@ -56,7 +66,52 @@ export default function PublishPage() {
   const [emailSubject, setEmailSubject] = useState("You're Invited!")
   const [emailMessage, setEmailMessage] = useState("I'd love for you to join me at this special event. Click the link below to view the invitation and RSVP.")
 
+  useEffect(() => {
+    const eventIdFromParams = (eventParam || projectParam || "").trim()
+    if (!eventIdFromParams) {
+      return
+    }
+
+    setResolvedEventId(eventIdFromParams)
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("eventora-last-published-event-id", eventIdFromParams)
+    }
+  }, [eventParam, projectParam])
+
+  useEffect(() => {
+    if (resolvedEventId) {
+      return
+    }
+
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const lastPublishedEventId = localStorage.getItem("eventora-last-published-event-id")
+    if (lastPublishedEventId) {
+      setResolvedEventId(lastPublishedEventId)
+    }
+  }, [resolvedEventId])
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    if (!invitePath) {
+      setInviteLink("")
+      return
+    }
+
+    setInviteLink(`${window.location.origin}${invitePath}`)
+  }, [invitePath])
+
   const handleCopyLink = () => {
+    if (!inviteLink) {
+      return
+    }
+
     navigator.clipboard.writeText(inviteLink)
     setLinkCopied(true)
     setTimeout(() => setLinkCopied(false), 2000)
@@ -128,8 +183,8 @@ export default function PublishPage() {
                 <div className="w-12 h-12 rounded-xl gradient-primary mx-auto mb-4 flex items-center justify-center">
                   <Sparkles className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="font-semibold mb-1">Summer Party 2026</h3>
-                <p className="text-xs text-muted-foreground">3 pages ready</p>
+                <h3 className="font-semibold mb-1">{titleFromParams}</h3>
+                <p className="text-xs text-muted-foreground">{pagesCount} pages ready</p>
               </div>
             </div>
 

@@ -5,6 +5,8 @@ import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { defaultInvitationId, getInvitationById } from "@/lib/invitations"
+import { auth } from "@/lib/firebase"
+import { onAuthStateChanged } from "firebase/auth"
 import {
   Sparkles,
   Send,
@@ -98,6 +100,7 @@ type PageContent = {
   fields?: { label: string; type: string; required: boolean }[]
   items?: { icon: string; label: string; value: string }[]
   elements?: InvitationElement[]
+  images?: string[]
 }
 
 type Message = {
@@ -105,12 +108,18 @@ type Message = {
   role: "assistant" | "user"
   content: string
   timestamp: Date
+  images?: string[]
 }
 
 type Version = {
   id: string
   label: string
   timestamp: Date
+  pages: InvitePage[]
+}
+
+type StarterTemplate = {
+  title: string
   pages: InvitePage[]
 }
 
@@ -200,6 +209,441 @@ const defaultPages: InvitePage[] = [
   }
 ]
 
+const starterTemplates: Record<string, StarterTemplate> = {
+  birthday: {
+    title: "Birthday Party",
+    pages: [
+      {
+        id: "cover",
+        name: "Cover",
+        icon: FileText,
+        content: {
+          headline: "You're Invited to a Birthday Bash",
+          subheadline: "Cake, music, and great company",
+          body: "Come celebrate with us for an evening full of fun, laughter, and birthday magic."
+        }
+      },
+      {
+        id: "details",
+        name: "Details",
+        icon: Calendar,
+        content: {
+          headline: "Party Details",
+          date: "Saturday, August 21, 2026",
+          time: "5:30 PM",
+          location: "Sunset Rooftop Lounge",
+          body: "Dress festive and bring your best party energy."
+        }
+      },
+      {
+        id: "schedule",
+        name: "Schedule",
+        icon: Clock,
+        content: {
+          headline: "Evening Flow",
+          items: [
+            { icon: "door-open", label: "Doors Open", value: "5:30 PM" },
+            { icon: "cake", label: "Cake Moment", value: "7:00 PM" },
+            { icon: "music", label: "Dance Floor", value: "7:30 PM" }
+          ]
+        }
+      },
+      {
+        id: "location",
+        name: "Location",
+        icon: MapPin,
+        content: {
+          headline: "Find Us",
+          location: "Sunset Rooftop Lounge, 128 Harbor Ave",
+          body: "Street parking is available nearby, and the entrance is on Harbor Ave."
+        }
+      },
+      {
+        id: "rsvp",
+        name: "RSVP",
+        icon: MessageSquare,
+        content: {
+          headline: "RSVP",
+          subheadline: "Save your spot at the party",
+          fields: [
+            { label: "Full Name", type: "text", required: true },
+            { label: "Email", type: "email", required: true },
+            { label: "Number of Guests", type: "number", required: true }
+          ],
+          buttons: [{ label: "Confirm Attendance", action: "submit" }]
+        }
+      }
+    ]
+  },
+  wedding: {
+    title: "Wedding Invitation",
+    pages: [
+      {
+        id: "cover",
+        name: "Cover",
+        icon: FileText,
+        content: {
+          headline: "Together With Their Families",
+          subheadline: "Invite you to celebrate their wedding",
+          body: "Join us as we begin our next chapter and celebrate love with those closest to us."
+        }
+      },
+      {
+        id: "details",
+        name: "Ceremony",
+        icon: Calendar,
+        content: {
+          headline: "Ceremony Details",
+          date: "Saturday, September 18, 2026",
+          time: "4:00 PM",
+          location: "Rosewood Estate Gardens",
+          body: "Reception to follow immediately after the ceremony."
+        }
+      },
+      {
+        id: "schedule",
+        name: "Schedule",
+        icon: Clock,
+        content: {
+          headline: "Wedding Day Timeline",
+          items: [
+            { icon: "rings", label: "Ceremony", value: "4:00 PM" },
+            { icon: "camera", label: "Photos", value: "5:00 PM" },
+            { icon: "glass", label: "Reception", value: "6:00 PM" }
+          ]
+        }
+      },
+      {
+        id: "location",
+        name: "Venue",
+        icon: MapPin,
+        content: {
+          headline: "Venue & Parking",
+          location: "Rosewood Estate, 420 Willow Lane",
+          body: "Complimentary valet and a shuttle service from downtown hotels are available."
+        }
+      },
+      {
+        id: "registry",
+        name: "Registry",
+        icon: Gift,
+        content: {
+          headline: "Registry",
+          body: "Your presence means everything. For those who wish, our registry links are available below."
+        }
+      },
+      {
+        id: "rsvp",
+        name: "RSVP",
+        icon: MessageSquare,
+        content: {
+          headline: "RSVP",
+          subheadline: "Kindly respond by August 20",
+          fields: [
+            { label: "Full Name", type: "text", required: true },
+            { label: "Email", type: "email", required: true },
+            { label: "Meal Preference", type: "text", required: false }
+          ],
+          buttons: [{ label: "Send RSVP", action: "submit" }]
+        }
+      }
+    ]
+  },
+  corporate: {
+    title: "Corporate Event",
+    pages: [
+      {
+        id: "cover",
+        name: "Cover",
+        icon: FileText,
+        content: {
+          headline: "You're Invited",
+          subheadline: "Corporate Networking Event",
+          body: "Connect with industry leaders, partners, and peers for an evening of insights and opportunities."
+        }
+      },
+      {
+        id: "details",
+        name: "Details",
+        icon: Calendar,
+        content: {
+          headline: "Event Details",
+          date: "Thursday, October 7, 2026",
+          time: "6:00 PM",
+          location: "Downtown Convention Hall",
+          body: "Business casual attire recommended."
+        }
+      },
+      {
+        id: "schedule",
+        name: "Agenda",
+        icon: Clock,
+        content: {
+          headline: "Agenda",
+          items: [
+            { icon: "users", label: "Registration", value: "6:00 PM" },
+            { icon: "mic", label: "Keynote", value: "6:45 PM" },
+            { icon: "handshake", label: "Networking", value: "7:30 PM" }
+          ]
+        }
+      },
+      {
+        id: "location",
+        name: "Venue",
+        icon: MapPin,
+        content: {
+          headline: "Venue Information",
+          location: "Downtown Convention Hall, 88 Market Street",
+          body: "On-site parking is available in Garage B."
+        }
+      },
+      {
+        id: "rsvp",
+        name: "RSVP",
+        icon: MessageSquare,
+        content: {
+          headline: "Confirm Attendance",
+          subheadline: "Reserve your seat",
+          fields: [
+            { label: "Full Name", type: "text", required: true },
+            { label: "Work Email", type: "email", required: true },
+            { label: "Company", type: "text", required: true }
+          ],
+          buttons: [{ label: "Register", action: "submit" }]
+        }
+      }
+    ]
+  },
+  baby: {
+    title: "Baby Shower",
+    pages: [
+      {
+        id: "cover",
+        name: "Cover",
+        icon: FileText,
+        content: {
+          headline: "A Little One Is On The Way",
+          subheadline: "Join us for a baby shower celebration",
+          body: "Let's celebrate this exciting new chapter with games, treats, and lots of love."
+        }
+      },
+      {
+        id: "details",
+        name: "Details",
+        icon: Calendar,
+        content: {
+          headline: "Shower Details",
+          date: "Sunday, July 11, 2026",
+          time: "1:00 PM",
+          location: "The Garden House",
+          body: "Light brunch and desserts will be served."
+        }
+      },
+      {
+        id: "schedule",
+        name: "Plan",
+        icon: Clock,
+        content: {
+          headline: "Event Plan",
+          items: [
+            { icon: "coffee", label: "Welcome Brunch", value: "1:00 PM" },
+            { icon: "gift", label: "Gift Opening", value: "2:00 PM" },
+            { icon: "camera", label: "Group Photos", value: "3:00 PM" }
+          ]
+        }
+      },
+      {
+        id: "registry",
+        name: "Registry",
+        icon: Gift,
+        content: {
+          headline: "Baby Registry",
+          body: "Your love and support mean the world. Registry details are included for anyone who asked."
+        }
+      },
+      {
+        id: "rsvp",
+        name: "RSVP",
+        icon: MessageSquare,
+        content: {
+          headline: "RSVP",
+          subheadline: "Please reply by June 25",
+          fields: [
+            { label: "Full Name", type: "text", required: true },
+            { label: "Email", type: "email", required: true },
+            { label: "Will You Attend?", type: "text", required: true }
+          ],
+          buttons: [{ label: "Submit RSVP", action: "submit" }]
+        }
+      }
+    ]
+  },
+  graduation: {
+    title: "Graduation Celebration",
+    pages: [
+      {
+        id: "cover",
+        name: "Cover",
+        icon: FileText,
+        content: {
+          headline: "Graduation Celebration",
+          subheadline: "Celebrate this milestone with us",
+          body: "Join us as we celebrate years of hard work, growth, and achievement."
+        }
+      },
+      {
+        id: "details",
+        name: "Details",
+        icon: Calendar,
+        content: {
+          headline: "Celebration Details",
+          date: "Friday, May 29, 2026",
+          time: "6:30 PM",
+          location: "Riverfront Hall",
+          body: "Ceremony recap and dinner celebration to follow."
+        }
+      },
+      {
+        id: "schedule",
+        name: "Schedule",
+        icon: Clock,
+        content: {
+          headline: "Evening Schedule",
+          items: [
+            { icon: "school", label: "Welcome Toast", value: "6:45 PM" },
+            { icon: "utensils", label: "Dinner", value: "7:15 PM" },
+            { icon: "music", label: "Celebration", value: "8:00 PM" }
+          ]
+        }
+      },
+      {
+        id: "gallery",
+        name: "Gallery",
+        icon: ImageIcon,
+        content: {
+          headline: "Memory Lane",
+          subheadline: "Highlights from the journey"
+        }
+      },
+      {
+        id: "rsvp",
+        name: "RSVP",
+        icon: MessageSquare,
+        content: {
+          headline: "RSVP",
+          subheadline: "We'd love to celebrate with you",
+          fields: [
+            { label: "Full Name", type: "text", required: true },
+            { label: "Email", type: "email", required: true },
+            { label: "Guest Count", type: "number", required: true }
+          ],
+          buttons: [{ label: "Confirm", action: "submit" }]
+        }
+      }
+    ]
+  },
+  social: {
+    title: "Social Gathering",
+    pages: [
+      {
+        id: "cover",
+        name: "Cover",
+        icon: FileText,
+        content: {
+          headline: "Let's Get Together",
+          subheadline: "An evening to connect and unwind",
+          body: "Good people, good conversation, and a relaxed vibe. Hope to see you there."
+        }
+      },
+      {
+        id: "details",
+        name: "Details",
+        icon: Calendar,
+        content: {
+          headline: "Gathering Details",
+          date: "Saturday, June 12, 2026",
+          time: "7:00 PM",
+          location: "City Terrace Lounge",
+          body: "Feel free to bring a friend and stay as long as you'd like."
+        }
+      },
+      {
+        id: "location",
+        name: "Location",
+        icon: MapPin,
+        content: {
+          headline: "Where To Meet",
+          location: "City Terrace Lounge, 15 Park View",
+          body: "Closest transit stop: Park View Station."
+        }
+      },
+      {
+        id: "faq",
+        name: "FAQ",
+        icon: MessageSquare,
+        content: {
+          headline: "Quick Notes",
+          subheadline: "Casual dress, open seating, no formal agenda"
+        }
+      },
+      {
+        id: "rsvp",
+        name: "RSVP",
+        icon: MessageSquare,
+        content: {
+          headline: "RSVP",
+          subheadline: "Let us know if you're coming",
+          fields: [
+            { label: "Full Name", type: "text", required: true },
+            { label: "Email", type: "email", required: true },
+            { label: "Bringing Anyone?", type: "text", required: false }
+          ],
+          buttons: [{ label: "Save My Spot", action: "submit" }]
+        }
+      }
+    ]
+  }
+}
+
+function getStarterTemplateFromPrompt(prompt: string): StarterTemplate | undefined {
+  const normalizedPrompt = prompt.trim().toLowerCase()
+  if (!normalizedPrompt) return undefined
+
+  if (normalizedPrompt.includes("birthday")) return starterTemplates.birthday
+  if (normalizedPrompt.includes("wedding")) return starterTemplates.wedding
+  if (normalizedPrompt.includes("corporate")) return starterTemplates.corporate
+  if (normalizedPrompt.includes("baby")) return starterTemplates.baby
+  if (normalizedPrompt.includes("graduation")) return starterTemplates.graduation
+  if (normalizedPrompt.includes("social")) return starterTemplates.social
+
+  return undefined
+}
+
+function cloneInvitationElements(elements?: InvitationElement[]): InvitationElement[] | undefined {
+  if (!elements) return undefined
+
+  return elements.map((element) => ({
+    ...element,
+    content: element.content ? { ...element.content } : undefined,
+    style: element.style ? { ...element.style } : undefined,
+    children: cloneInvitationElements(element.children),
+  }))
+}
+
+function clonePages(pages: InvitePage[]): InvitePage[] {
+  return pages.map((page) => ({
+    ...page,
+    content: {
+      ...page.content,
+      buttons: page.content.buttons ? page.content.buttons.map((button) => ({ ...button })) : undefined,
+      fields: page.content.fields ? page.content.fields.map((field) => ({ ...field })) : undefined,
+      items: page.content.items ? page.content.items.map((item) => ({ ...item })) : undefined,
+      elements: cloneInvitationElements(page.content.elements),
+      images: page.content.images ? [...page.content.images] : undefined,
+    },
+  }))
+}
+
 const availablePageTypes = [
   { id: "cover", name: "Cover Page", icon: FileText },
   { id: "details", name: "Event Details", icon: Calendar },
@@ -215,21 +659,52 @@ export default function EditorPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialPrompt = searchParams.get("prompt") || ""
-  const currentInvitation = getInvitationById(searchParams.get("event") ?? defaultInvitationId)
+  const starterTemplate = getStarterTemplateFromPrompt(initialPrompt)
+  const eventParam = searchParams.get("event")
+  const projectParam = searchParams.get("project")
+  const draftEventIdRef = useRef<string>("")
+  const draftIdAppliedRef = useRef(false)
+  if (!draftEventIdRef.current) {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      draftEventIdRef.current = crypto.randomUUID()
+    } else {
+      draftEventIdRef.current = `draft-${Date.now()}`
+    }
+  }
+  const currentEventId = eventParam?.trim() || projectParam?.trim() || draftEventIdRef.current
+  const currentInvitation = getInvitationById(eventParam ?? projectParam ?? defaultInvitationId)
+  const starterPages = clonePages(starterTemplate?.pages ?? defaultPages)
   const assistantName = "Aria Voss"
 
   const [messages, setMessages] = useState<Message[]>([])
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
-  const [pages, setPages] = useState<InvitePage[]>(defaultPages)
+  const [pages, setPages] = useState<InvitePage[]>(starterPages)
   const [activePage, setActivePage] = useState<string>("cover")
+  const [eventTitle, setEventTitle] = useState<string>(starterTemplate?.title ?? currentInvitation.title)
   const [versions, setVersions] = useState<Version[]>([
-    { id: "v1", label: "v1", timestamp: new Date(), pages: defaultPages }
+    { id: "v1", label: "v1", timestamp: new Date(), pages: clonePages(starterPages) }
   ])
   const [activeVersion, setActiveVersion] = useState("v1")
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
   const [showPagePanel, setShowPagePanel] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const [attachedImages, setAttachedImages] = useState<Array<{name: string, preview: string}>>([])
+  const [isDraggingImages, setIsDraggingImages] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [authToken, setAuthToken] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
+  const [isLoadingDraft, setIsLoadingDraft] = useState(true)
+  const initialPromptSentRef = useRef(false)
+
+  useEffect(() => {
+    if (eventParam?.trim() || projectParam?.trim() || draftIdAppliedRef.current) return
+    draftIdAppliedRef.current = true
+
+    const nextParams = new URLSearchParams(searchParams.toString())
+    nextParams.set("event", currentEventId)
+    router.replace(`/editor?${nextParams.toString()}`)
+  }, [currentEventId, eventParam, projectParam, router, searchParams])
 
   // Initialize with prompt if provided
   useEffect(() => {
@@ -237,7 +712,9 @@ export default function EditorPage() {
       const welcomeMessage: Message = {
         id: "welcome",
         role: "assistant",
-        content: `I'm ${assistantName}. I'll help you shape "${initialPrompt}" into something more intentional. I started with a multi-page invitation, and we can make the cover, details, and RSVP feel more alive from here.`,
+        content: starterTemplate
+          ? `I'm ${assistantName}. I already set up a tailored multi-page starter for "${starterTemplate.title}" with prefilled sections. Tell me what you'd like to refine first.`
+          : `I'm ${assistantName}. I'll help you shape "${initialPrompt}" into something more intentional. I started with a multi-page invitation, and we can make the cover, details, and RSVP feel more alive from here.`,
         timestamp: new Date()
       }
       setMessages([welcomeMessage])
@@ -250,7 +727,205 @@ export default function EditorPage() {
       }
       setMessages([welcomeMessage])
     }
-  }, [initialPrompt])
+  }, [assistantName, initialPrompt, starterTemplate])
+
+  // Set up auth token and load draft
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const token = await user.getIdToken()
+          setAuthToken(token)
+          setUserId(user.uid)
+          
+          // Try to load draft from database
+          const response = await fetch("/api/editor/load", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({ 
+              eventId: currentEventId,
+              userId: user.uid
+            })
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            // set title if present
+            if (data.event.title && typeof data.event.title === "string") {
+              setEventTitle(data.event.title)
+            }
+            // set pages if present
+            if (data.event.pages && Array.isArray(data.event.pages) && data.event.pages.length > 0) {
+              setPages(data.event.pages as InvitePage[])
+              if (data.event.pages.length > 0) {
+                setActivePage(data.event.pages[0].id)
+              }
+              const firstVersion: Version = {
+                id: "v1",
+                label: "v1",
+                timestamp: new Date(data.event.updatedAt),
+                pages: data.event.pages as InvitePage[]
+              }
+              setVersions([firstVersion])
+              setActiveVersion("v1")
+            }
+            // set chat messages if present
+            if (data.event.messages && Array.isArray(data.event.messages)) {
+              try {
+                // normalize timestamps to Date objects
+                const msgs = data.event.messages.map((m: any) => ({
+                  id: m.id,
+                  role: m.role,
+                  content: m.content,
+                  timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+                  images: m.images ?? []
+                }))
+                setMessages(msgs)
+              } catch (err) {
+                console.warn("Failed to parse saved messages", err)
+              }
+            }
+          } else {
+            // Event doesn't exist or error loading - use defaults
+            console.warn("No saved draft found, using defaults")
+          }
+        } catch (error) {
+          console.error("Error checking for draft:", error)
+        } finally {
+          setIsLoadingDraft(false)
+        }
+      } else {
+        setIsLoadingDraft(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [currentEventId])
+
+  // Send initial prompt to AI if provided and not yet sent (only after draft loading completes)
+  useEffect(() => {
+    // Early exit if conditions aren't met
+        // Only proceed if we have everything we need
+        if (!initialPrompt) {
+          return
+        }
+        
+        if (initialPromptSentRef.current) {
+          return
+        }
+        
+        // Wait for draft to finish loading before checking messages
+        if (isLoadingDraft) {
+          return
+        }
+        
+        // Auth must be ready
+        if (!authToken) {
+      return
+    }
+    
+    // Check if the initial prompt was already sent in a previous session
+        // Check if the initial prompt was already sent in a previous session
+        // by looking for a message with the exact same content
+        const hasInitialPrompt = messages.some(
+          msg => msg.role === "user" && msg.content === initialPrompt
+        )
+        
+    if (hasInitialPrompt) {
+          // Prompt was already sent, don't send again
+      initialPromptSentRef.current = true
+      return
+    }
+    
+        // All clear, mark as sent and prepare to send
+    initialPromptSentRef.current = true
+    
+    const sendInitialPrompt = async () => {
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: initialPrompt,
+        timestamp: new Date()
+      }
+      
+      // Use current state from closure at time of effect execution
+      const conversation = [...messages, userMessage]
+      setMessages(conversation)
+      setIsTyping(true)
+
+      try {
+        const response = await fetch("/api/editor/ai", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: initialPrompt,
+            invitation: {
+              id: currentEventId,
+              title: currentInvitation.title,
+              description: currentInvitation.description,
+            },
+            activePage,
+            pages: pages.map(({ id, name, content }) => ({ id, name, content })),
+            recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("AI request failed")
+        }
+
+        const data = (await response.json()) as AiEditorResponse
+        const reply = data.reply?.trim() || "I took a pass at that and shaped the invitation with a clearer visual rhythm."
+        const assistantMessage: Message = {
+          id: Date.now().toString(),
+          role: "assistant",
+          content: reply,
+          timestamp: new Date(),
+        }
+
+        let nextPages = pages
+        let nextActivePage = activePage
+        let didMutate = false
+
+        if (data.actions?.length) {
+          const applied = applyAiActions(data.actions, pages)
+          nextPages = applied.pages
+          nextActivePage = applied.activePageId ?? activePage
+          didMutate = applied.didMutate
+        }
+
+        setMessages(prev => [...prev, assistantMessage])
+
+        if (didMutate) {
+          setPages(nextPages)
+          setActivePage(nextActivePage)
+
+          const nextVersionId = `v${versions.length + 1}`
+          const newVersion: Version = {
+            id: nextVersionId,
+            label: nextVersionId,
+            timestamp: new Date(),
+            pages: nextPages,
+          }
+          setVersions(prev => [...prev, newVersion])
+          setActiveVersion(nextVersionId)
+        }
+      } catch (error) {
+        console.error("Error sending initial prompt:", error)
+        const response = generateFallbackAIResponse(initialPrompt)
+        setMessages(prev => [...prev, response])
+      } finally {
+        setIsTyping(false)
+      }
+    }
+
+    sendInitialPrompt()
+  }, [initialPrompt, isLoadingDraft, authToken, messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -260,14 +935,71 @@ export default function EditorPage() {
     scrollToBottom()
   }, [messages])
 
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDraggingImages(false)
+    
+    const files = Array.from(e.dataTransfer.files)
+    const imageFiles = files.filter(f => f.type.startsWith('image/'))
+    
+    imageFiles.forEach(file => {
+      const reader = new FileReader()
+      reader.onload = (event) => {
+        const preview = event.target?.result as string
+        setAttachedImages(prev => [...prev, { name: file.name, preview }])
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+
+  const removeImage = (index: number) => {
+    setAttachedImages(prev => {
+      URL.revokeObjectURL(prev[index].preview)
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!authToken || !userId) return
+      
+      setSaveStatus("saving")
+      try {
+        await fetch("/api/editor/save", {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`
+          },
+          body: JSON.stringify({
+            invitationId: currentEventId,
+            userId: userId,
+            title: eventTitle,
+            pages: pages.map(({ id, name, content }) => ({ id, name, content })),
+            messages: messages.map(({ id, role, content: msgContent, timestamp, images }) => ({ id, role, content: msgContent, timestamp, images }))
+          }),
+        })
+        setSaveStatus("saved")
+        setTimeout(() => setSaveStatus("idle"), 2000)
+      } catch (error) {
+        console.error("Failed to save:", error)
+        setSaveStatus("error")
+      }
+    }, 1000)
+    return () => clearTimeout(timer)
+  }, [eventTitle, messages, pages, currentEventId, authToken, userId])
+
   const handleSendMessage = async () => {
     const prompt = inputValue.trim()
-    if (!prompt || isTyping) return
+    const hasImages = attachedImages.length > 0
+    if (!prompt && !hasImages || isTyping) return
 
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: prompt,
+        images: hasImages ? attachedImages.map(img => img.preview) : undefined,
       timestamp: new Date()
     }
 
@@ -286,7 +1018,7 @@ export default function EditorPage() {
         body: JSON.stringify({
           prompt,
           invitation: {
-            id: currentInvitation.id,
+            id: currentEventId,
             title: currentInvitation.title,
             description: currentInvitation.description,
           },
@@ -364,7 +1096,7 @@ export default function EditorPage() {
 
   const handlePreview = () => {
     const previewData = {
-      id: currentInvitation.id,
+      id: currentEventId,
       title: currentInvitation.title,
       theme: {
         primaryColor: "from-accent via-primary to-chart-3",
@@ -400,6 +1132,8 @@ export default function EditorPage() {
             <ChevronLeft className="w-5 h-5" />
           </Link>
 
+          {/* title moved next to undo/redo */}
+
           {/* Version selector */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -431,6 +1165,37 @@ export default function EditorPage() {
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <Redo2 className="w-4 h-4" />
             </Button>
+          </div>
+          {/* Editable title to the right of undo/redo */}
+          <div className="ml-3 mt-1 flex items-center gap-3">
+            <input
+              value={eventTitle}
+              onChange={(e) => setEventTitle(e.target.value)}
+              placeholder="Untitled Event"
+              aria-label="Event title"
+              className="w-64 max-w-[40vw] truncate bg-card/10 border border-border/50 rounded-md px-2 py-1 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+
+            {/* Save status indicator */}
+            <div className="flex items-center gap-2 min-w-[92px]">
+              {saveStatus === "saving" && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <div className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                  Saving...
+                </div>
+              )}
+              {saveStatus === "saved" && (
+                <div className="flex items-center gap-1 text-xs text-green-500">
+                  <Check className="w-3.5 h-3.5" />
+                  Saved
+                </div>
+              )}
+              {saveStatus === "error" && (
+                <div className="flex items-center gap-1 text-xs text-red-500">
+                  <span>Save failed</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -465,7 +1230,34 @@ export default function EditorPage() {
           <Button
             size="sm"
             className="gradient-primary border-0 text-white"
-            onClick={() => router.push("/publish")}
+            onClick={async () => {
+              if (!authToken || !userId) return
+              try {
+                const response = await fetch("/api/editor/publish", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${authToken}`
+                  },
+                  body: JSON.stringify({ 
+                    eventId: currentEventId,
+                    userId: userId
+                  })
+                })
+                if (response.ok) {
+                  const data = await response.json().catch(() => ({}))
+                  const eventId = data.eventId ?? currentEventId
+                  if (typeof window !== "undefined") {
+                    localStorage.setItem("eventora-last-published-event-id", eventId)
+                  }
+                  const title = encodeURIComponent(eventTitle ?? currentInvitation.title ?? "Untitled Event")
+                  const pagesCount = pages.length
+                  router.push(`/publish?event=${encodeURIComponent(eventId)}&title=${title}&pages=${pagesCount}`)
+                }
+              } catch (error) {
+                console.error("Failed to publish:", error)
+              }
+            }}
           >
             Publish
           </Button>
@@ -595,7 +1387,11 @@ export default function EditorPage() {
                     onClick={() => setActivePage(page.id)}
                   >
                     <GripVertical className="w-3 h-3 text-muted-foreground/50 cursor-grab" />
-                    <page.icon className="w-4 h-4 shrink-0" />
+                    {page.icon ? (
+                      <page.icon className="w-4 h-4 shrink-0" />
+                    ) : (
+                      <FileText className="w-4 h-4 shrink-0" />
+                    )}
                     <span className="flex-1 text-xs truncate">{page.name}</span>
                     <span className="text-[10px] text-muted-foreground">{index + 1}</span>
 
@@ -705,39 +1501,43 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
       {/* Content */}
       <div className="p-8 -mt-12 relative">
         {/* Icon badge */}
-        <div className="w-14 h-14 mx-auto rounded-full bg-card border-4 border-card flex items-center justify-center shadow-lg mb-6">
-          <page.icon className="w-5 h-5 text-primary" />
+          <div className="w-14 h-14 mx-auto rounded-full bg-card border-4 border-card flex items-center justify-center shadow-lg mb-6">
+          {page.icon ? (
+            <page.icon className="w-5 h-5 text-primary" />
+          ) : (
+            <FileText className="w-5 h-5 text-primary" />
+          )}
         </div>
 
         <div className="text-center space-y-6">
-          {content.headline && (
+          {content.headline && typeof content.headline === "string" && (
             <h2 className="text-2xl font-semibold gradient-text">{content.headline}</h2>
           )}
 
-          {content.subheadline && (
+          {content.subheadline && typeof content.subheadline === "string" && (
             <p className="text-sm text-muted-foreground">{content.subheadline}</p>
           )}
 
-          {content.body && (
+          {content.body && typeof content.body === "string" && (
             <p className="text-sm text-muted-foreground leading-relaxed">{content.body}</p>
           )}
 
           {/* Date/Time/Location */}
           {(content.date || content.time || content.location) && (
             <div className="space-y-3 py-4">
-              {content.date && (
+              {content.date && typeof content.date === "string" && (
                 <div className="flex items-center justify-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-primary" />
                   <span>{content.date}</span>
                 </div>
               )}
-              {content.time && (
+              {content.time && typeof content.time === "string" && (
                 <div className="flex items-center justify-center gap-2 text-sm">
                   <Clock className="w-4 h-4 text-accent" />
                   <span>{content.time}</span>
                 </div>
               )}
-              {content.location && (
+              {content.location && typeof content.location === "string" && (
                 <div className="flex items-center justify-center gap-2 text-sm">
                   <MapPin className="w-4 h-4 text-chart-3" />
                   <span>{content.location}</span>
@@ -827,15 +1627,15 @@ function InvitationElementView({ element }: { element: InvitationElement }) {
     return (
       <div className="overflow-hidden" style={baseStyle}>
         <img
-          src={content.src || "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80"}
-          alt={content.alt || content.title || content.text || "Invitation image"}
+          src={typeof content.src === "string" ? content.src : "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80"}
+          alt={typeof content.alt === "string" ? content.alt : (typeof content.title === "string" ? content.title : (typeof content.text === "string" ? content.text : "Invitation image"))}
           className="block w-full object-cover"
           style={{ height: style.height || "240px" }}
         />
-        {(content.title || content.description) && (
+        {(typeof content.title === "string" || typeof content.description === "string") && (
           <div className="p-4 space-y-1">
-            {content.title && <p className="font-medium text-sm">{content.title}</p>}
-            {content.description && <p className="text-xs text-muted-foreground">{content.description}</p>}
+            {typeof content.title === "string" && <p className="font-medium text-sm">{content.title}</p>}
+            {typeof content.description === "string" && <p className="text-xs text-muted-foreground">{content.description}</p>}
           </div>
         )}
       </div>
@@ -852,10 +1652,10 @@ function InvitationElementView({ element }: { element: InvitationElement }) {
         >
           {content.href ? (
             <a href={content.href} target="_blank" rel="noreferrer">
-              {content.label || content.text || "Button"}
+              {typeof content.label === "string" ? content.label : (typeof content.text === "string" ? content.text : "Button")}
             </a>
           ) : (
-            <span>{content.label || content.text || "Button"}</span>
+            <span>{typeof content.label === "string" ? content.label : (typeof content.text === "string" ? content.text : "Button")}</span>
           )}
         </Button>
       </div>
@@ -869,7 +1669,7 @@ function InvitationElementView({ element }: { element: InvitationElement }) {
           className="inline-flex items-center rounded-full border border-border/60 px-3 py-1 text-xs font-medium"
           style={baseStyle}
         >
-          {content.label || content.text || content.title || "Badge"}
+          {typeof content.label === "string" ? content.label : (typeof content.text === "string" ? content.text : (typeof content.title === "string" ? content.title : "Badge"))}
         </span>
       </div>
     )
@@ -888,8 +1688,8 @@ function InvitationElementView({ element }: { element: InvitationElement }) {
           gridTemplateColumns: style.gridTemplateColumns,
         }}
       >
-        {content.title && <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{content.title}</p>}
-        {content.description && <p className="text-sm text-muted-foreground">{content.description}</p>}
+        {content.title && typeof content.title === "string" && <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{content.title}</p>}
+        {content.description && typeof content.description === "string" && <p className="text-sm text-muted-foreground">{content.description}</p>}
         {children.map((child) => (
           <InvitationElementView key={child.id} element={child} />
         ))}
@@ -899,9 +1699,9 @@ function InvitationElementView({ element }: { element: InvitationElement }) {
 
   return (
     <div className="space-y-2" style={baseStyle}>
-      {content.title && <p className="text-lg font-semibold">{content.title}</p>}
-      {content.text && <p className="text-sm leading-relaxed text-muted-foreground">{content.text}</p>}
-      {content.description && <p className="text-sm leading-relaxed text-muted-foreground">{content.description}</p>}
+      {content.title && typeof content.title === "string" && <p className="text-lg font-semibold">{content.title}</p>}
+      {content.text && typeof content.text === "string" && <p className="text-sm leading-relaxed text-muted-foreground">{content.text}</p>}
+      {content.description && typeof content.description === "string" && <p className="text-sm leading-relaxed text-muted-foreground">{content.description}</p>}
       {children.length > 0 && (
         <div className="space-y-2 pt-2">
           {children.map((child) => (

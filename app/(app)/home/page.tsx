@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { auth } from "@/lib/firebase"
+import { onAuthStateChanged } from "firebase/auth"
 import {
   ArrowUp,
   Paperclip,
@@ -28,47 +30,67 @@ const quickPrompts = [
   { label: "Social Gathering", icon: PartyPopper },
 ]
 
-const recentProjects = [
-  {
-    id: "1",
-    title: "Summer Garden Party",
-    updatedAt: "2 hours ago",
-    thumbnail: "gradient-1"
-  },
-  {
-    id: "2",
-    title: "Product Launch Event",
-    updatedAt: "Yesterday",
-    thumbnail: "gradient-2"
-  },
-  {
-    id: "3",
-    title: "Annual Team Celebration",
-    updatedAt: "3 days ago",
-    thumbnail: "gradient-3"
-  },
-]
+type RecentProject = {
+  id: string
+  title: string
+  updatedAt: string
+  thumbnail: "gradient-1" | "gradient-2" | "gradient-3"
+}
+
+function formatRelativeUpdatedAt(updatedAt: string) {
+  const updated = new Date(updatedAt)
+  if (Number.isNaN(updated.getTime())) return "Recently updated"
+
+  const diffMs = Date.now() - updated.getTime()
+  const minutes = Math.floor(diffMs / 60000)
+  const hours = Math.floor(diffMs / 3600000)
+  const days = Math.floor(diffMs / 86400000)
+
+  if (minutes < 1) return "Just now"
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`
+  if (days < 7) return `${days} day${days === 1 ? "" : "s"} ago`
+
+  return updated.toLocaleDateString(undefined, { month: "short", day: "numeric" })
+}
+
+function thumbnailForIndex(index: number): RecentProject["thumbnail"] {
+  if (index % 3 === 0) return "gradient-1"
+  if (index % 3 === 1) return "gradient-2"
+  return "gradient-3"
+}
 
 export default function HomePage() {
   const [inputValue, setInputValue] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isDropOpen, setIsDropOpen] = useState(false)
   const [attachments, setAttachments] = useState<Array<{ id: string; file: File; preview: string }>>([])
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const dropToggleRef = useRef<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const router = useRouter()
 
+  const createDraftId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID()
+    }
+    return `draft-${Date.now()}`
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (inputValue.trim()) {
-      router.push(`/editor?prompt=${encodeURIComponent(inputValue.trim())}`)
+      const draftId = createDraftId()
+      router.push(`/editor?prompt=${encodeURIComponent(inputValue.trim())}&event=${encodeURIComponent(draftId)}`)
     }
   }
 
   const handleQuickPrompt = (prompt: string) => {
-    router.push(`/editor?prompt=${encodeURIComponent(prompt)}`)
+    const draftId = createDraftId()
+    router.push(`/editor?prompt=${encodeURIComponent(prompt)}&event=${encodeURIComponent(draftId)}`)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -103,6 +125,56 @@ export default function HomePage() {
       document.removeEventListener("keydown", onKey)
     }
   }, [isDropOpen])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setRecentProjects([])
+        setIsLoadingProjects(false)
+        return
+      }
+
+      setIsLoadingProjects(true)
+
+      try {
+        const token = await user.getIdToken()
+        const res = await fetch("/api/events/list", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!res.ok) {
+          setRecentProjects([])
+          return
+        }
+
+        const data = await res.json()
+        if (!Array.isArray(data.events)) {
+          setRecentProjects([])
+          return
+        }
+
+        setRecentProjects(
+          data.events.slice(0, 3).map((event: { id: string; title: string; updatedAt?: string }, index: number) => ({
+            id: event.id,
+            title: event.title,
+            updatedAt: event.updatedAt ? formatRelativeUpdatedAt(event.updatedAt) : "Recently updated",
+            thumbnail: thumbnailForIndex(index),
+          }))
+        )
+      } catch (error) {
+        console.error("Failed to load recent projects:", error)
+        setRecentProjects([])
+      } finally {
+        setIsLoadingProjects(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
 
   const handleFiles = (files: FileList | null) => {
     if (!files) return
@@ -296,39 +368,55 @@ export default function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {recentProjects.map((project) => (
-              <Link
-                key={project.id}
-                href={`/editor?project=${project.id}`}
-                className="group"
-              >
-                <div className="bg-card rounded-xl border border-border/50 overflow-hidden hover:border-primary/30 transition-smooth">
-                  {/* Thumbnail */}
-                  <div className={`h-24 ${project.thumbnail === "gradient-1"
-                      ? "bg-gradient-to-br from-primary/30 to-accent/20"
-                      : project.thumbnail === "gradient-2"
-                        ? "bg-gradient-to-br from-accent/30 to-chart-3/20"
-                        : "bg-gradient-to-br from-chart-3/30 to-primary/20"
-                    }`}>
-                    <div className="w-full h-full flex items-center justify-center">
-                      <div className="w-16 h-20 bg-card/80 rounded-lg shadow-lg flex items-center justify-center">
-                        <Sparkles className="w-5 h-5 text-muted-foreground" />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Info */}
-                  <div className="p-3">
-                    <h4 className="font-medium text-sm truncate group-hover:text-primary transition-colors">
-                      {project.title}
-                    </h4>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {project.updatedAt}
-                    </p>
+            {isLoadingProjects ? (
+              Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="bg-card rounded-xl border border-border/50 overflow-hidden animate-pulse">
+                  <div className="h-24 bg-secondary/40" />
+                  <div className="p-3 space-y-2">
+                    <div className="h-4 w-2/3 bg-secondary/60 rounded" />
+                    <div className="h-3 w-1/3 bg-secondary/50 rounded" />
                   </div>
                 </div>
-              </Link>
-            ))}
+              ))
+            ) : recentProjects.length > 0 ? (
+              recentProjects.map((project) => (
+                <Link
+                  key={project.id}
+                  href={`/editor?event=${project.id}`}
+                  className="group"
+                >
+                  <div className="bg-card rounded-xl border border-border/50 overflow-hidden hover:border-primary/30 transition-smooth">
+                    {/* Thumbnail */}
+                    <div className={`h-24 ${project.thumbnail === "gradient-1"
+                        ? "bg-gradient-to-br from-primary/30 to-accent/20"
+                        : project.thumbnail === "gradient-2"
+                          ? "bg-gradient-to-br from-accent/30 to-chart-3/20"
+                          : "bg-gradient-to-br from-chart-3/30 to-primary/20"
+                      }`}>
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="w-16 h-20 bg-card/80 rounded-lg shadow-lg flex items-center justify-center">
+                          <Sparkles className="w-5 h-5 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="p-3">
+                      <h4 className="font-medium text-sm truncate group-hover:text-primary transition-colors">
+                        {project.title}
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {project.updatedAt}
+                      </p>
+                    </div>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="col-span-full rounded-xl border border-dashed border-border/60 bg-card/40 px-4 py-6 text-sm text-muted-foreground">
+                You have no recent projects.
+              </div>
+            )}
           </div>
         </div>
       </div>

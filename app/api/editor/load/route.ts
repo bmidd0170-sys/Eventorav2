@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { jwtDecode } from "jwt-decode"
+import jwtDecode from "jwt-decode"
 
 type LoadRequest = {
   eventId: string

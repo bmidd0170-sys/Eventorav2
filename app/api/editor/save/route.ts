@@ -59,13 +59,32 @@ export async function POST(req: NextRequest) {
 
     // If user doesn't exist, create them with minimal info
     if (!dbUser) {
-      dbUser = await prisma.user.create({
-        data: {
-          firebaseUid,
-          email: decodedToken.email || `user+${firebaseUid}@example.com`,
-          displayName: decodedToken.name || "User"
+      const userEmail = decodedToken.email || `user+${firebaseUid}@example.com`
+      try {
+        dbUser = await prisma.user.create({
+          data: {
+            firebaseUid,
+            email: userEmail,
+            displayName: decodedToken.name || "User"
+          }
+        })
+      } catch (createError: any) {
+        // If unique constraint violation on email, find existing user by email and update firebaseUid
+        if (createError.code === 'P2002' && createError.meta?.target?.includes('email')) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: userEmail }
+          })
+          if (dbUser && !dbUser.firebaseUid) {
+            // Update the existing user with the new Firebase UID
+            dbUser = await prisma.user.update({
+              where: { email: userEmail },
+              data: { firebaseUid }
+            })
+          }
+        } else {
+          throw createError
         }
-      })
+      }
     }
 
     // Create or update the event with upsert using database user ID

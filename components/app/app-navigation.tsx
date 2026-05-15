@@ -2,18 +2,18 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import {
   Sparkles,
   Home,
+  Users,
   LayoutDashboard,
   Settings,
-  Plus
 } from "lucide-react"
 
 const navItems = [
   { label: "Home", href: "/home", icon: Home },
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Connections", href: "/connections", icon: Users },
   { label: "Settings", href: "/settings", icon: Settings },
 ]
 

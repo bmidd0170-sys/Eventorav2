@@ -37,7 +37,7 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="relative py-24 overflow-hidden">
+    <section id="features" className="relative py-24 overflow-hidden scroll-mt-20">
       {/* Background accent */}
       <div className="absolute bottom-0 right-0 w-[400px] h-[400px] rounded-full bg-accent/10 blur-[100px]" />
       

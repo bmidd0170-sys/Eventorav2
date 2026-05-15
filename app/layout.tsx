@@ -3,6 +3,7 @@ import Script from 'next/script'
 import { Inter, Poppins } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
+import { BrandProvider } from '@/components/brand/brand-provider'
 
 const inter = Inter({
   subsets: ["latin"],
@@ -52,7 +53,9 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.variable} ${poppins.variable} font-sans antialiased`}>
-        {children}
+        <BrandProvider>
+          {children}
+        </BrandProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

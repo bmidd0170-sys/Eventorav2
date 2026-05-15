@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { defaultInvitationId, getInvitationById } from "@/lib/invitations"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
+import { getUserBranding, applyBrandSettingsToPages } from "@/lib/branding"
 import {
   Sparkles,
   Send,
@@ -695,6 +696,8 @@ export default function EditorPage() {
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
+  const [brandSettings, setBrandSettings] = useState<any>(null)
+  const brandAppliedRef = useRef(false)
   const initialPromptSentRef = useRef(false)
 
   useEffect(() => {
@@ -804,6 +807,49 @@ export default function EditorPage() {
 
     return () => unsubscribe()
   }, [currentEventId])
+
+  // Load brand settings when user ID is available
+  useEffect(() => {
+    if (!userId) return
+
+    const loadBrand = async () => {
+      try {
+        const brand = await getUserBranding(userId)
+        setBrandSettings(brand)
+      } catch (error) {
+        console.error("Error loading brand settings:", error)
+      }
+    }
+
+    loadBrand()
+  }, [userId])
+
+  // Apply brand settings to initial pages (only once, when brand settings are loaded)
+  useEffect(() => {
+    if (!brandSettings || brandAppliedRef.current || pages.length === 0) return
+    if (isLoadingDraft) return // Wait for draft to finish loading
+
+    // Check if this is a new invitation (not loaded from database)
+    // If pages were loaded from database, don't override with brand settings
+    const isLoadedFromDatabase = pages.length > 0 && 
+      pages.some(p => p.content?.headline && p.content.headline !== "You're Invited" && 
+                       p.content.headline !== "Together With Their Families" &&
+                       p.content.headline !== "You're Invited to a Birthday Bash")
+
+    if (!isLoadedFromDatabase && Object.keys(brandSettings).length > 0) {
+      brandAppliedRef.current = true
+      const brandedPages = applyBrandSettingsToPages(pages, brandSettings)
+      setPages(brandedPages)
+      
+      // Also update the version history
+      setVersions(prevVersions => 
+        prevVersions.map(v => ({
+          ...v,
+          pages: v.pages === pages ? brandedPages : v.pages
+        }))
+      )
+    }
+  }, [brandSettings, isLoadingDraft, pages])
 
   // Send initial prompt to AI if provided and not yet sent (only after draft loading completes)
   useEffect(() => {
@@ -1506,9 +1552,9 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
   const customElements = [...(content.elements ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
   return (
-    <div className="bg-card rounded-2xl border border-border/50 overflow-hidden shadow-2xl">
-      {/* Page header with gradient */}
-      <div className="h-28 bg-gradient-to-br from-primary/30 via-accent/20 to-chart-3/20 relative">
+    <div className="invitation-root bg-card rounded-2xl border border-border/50 overflow-hidden shadow-2xl">
+      {/* Page header themed by brand variables */}
+      <div className="h-28 gradient-primary relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
       </div>
 
@@ -1517,9 +1563,9 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
         {/* Icon badge */}
           <div className="w-14 h-14 mx-auto rounded-full bg-card border-4 border-card flex items-center justify-center shadow-lg mb-6">
           {page.icon ? (
-            <page.icon className="w-5 h-5 text-primary" />
+            <page.icon className="w-5 h-5" style={{ color: 'var(--brand-primary, var(--primary))' }} />
           ) : (
-            <FileText className="w-5 h-5 text-primary" />
+            <FileText className="w-5 h-5" style={{ color: 'var(--brand-primary, var(--primary))' }} />
           )}
         </div>
 

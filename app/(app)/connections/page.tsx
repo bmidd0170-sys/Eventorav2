@@ -14,6 +14,8 @@ import {
   type Connection,
   type ConnectionRequest,
 } from "@/lib/connections"
+import ConnectionNotifications from "@/components/connections/connection-notifications"
+import IncomingRequestsPanel from "@/components/connections/incoming-requests-panel"
 import { Button } from "@/components/ui/button"
 import {
   Users,
@@ -45,7 +47,9 @@ export default function ConnectionsPage() {
       }
     })
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribe()
+    }
   }, [])
 
   const loadConnections = async (userId: string) => {
@@ -168,6 +172,8 @@ export default function ConnectionsPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <ConnectionNotifications currentUserId={currentUserId} onNewRequest={() => currentUserId && loadPendingRequests(currentUserId)} />
+      <IncomingRequestsPanel currentUserId={currentUserId} requests={pendingRequests} onAccept={handleAcceptRequest} onReject={handleRejectRequest} />
       <div className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
         <p className="text-muted-foreground">Manage all of your connections</p>

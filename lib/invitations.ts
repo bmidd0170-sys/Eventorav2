@@ -11,6 +11,7 @@ export type InvitationSummary = {
     total: number
   }
   reminder?: boolean
+  updatedAt?: string
 }
 
 export const invitations: InvitationSummary[] = [

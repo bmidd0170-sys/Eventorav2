@@ -2,6 +2,53 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { jwtDecode } from "jwt-decode"
 
+async function getOrCreateDbUser(decodedToken: any) {
+  const firebaseUid = decodedToken.sub
+  if (!firebaseUid) {
+    return null
+  }
+
+  let dbUser = await prisma.user.findUnique({ where: { firebaseUid } })
+  if (dbUser) {
+    return dbUser
+  }
+
+  const userEmail = decodedToken.email || `user+${firebaseUid}@example.com`
+
+  try {
+    return await prisma.user.create({
+      data: {
+        firebaseUid,
+        email: userEmail,
+        displayName: decodedToken.name || "User",
+      },
+    })
+  } catch (createError: any) {
+    if (createError.code === "P2002") {
+      const existingByUid = await prisma.user.findUnique({ where: { firebaseUid } })
+      if (existingByUid) {
+        return existingByUid
+      }
+
+      const existingByEmail = await prisma.user.findUnique({ where: { email: userEmail } })
+      if (existingByEmail) {
+        if (existingByEmail.firebaseUid) {
+          return existingByEmail
+        }
+
+        return prisma.user.update({
+          where: { email: userEmail },
+          data: { firebaseUid },
+        })
+      }
+
+      return null
+    }
+
+    throw createError
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization")
@@ -29,10 +76,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing eventId" }, { status: 400 })
     }
 
-    // Get the user
-    const dbUser = await prisma.user.findUnique({ where: { firebaseUid } })
+    const dbUser = await getOrCreateDbUser(decodedToken)
     if (!dbUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return NextResponse.json({ invitations: [] }, { status: 200 })
     }
 
     // Verify the user owns this event

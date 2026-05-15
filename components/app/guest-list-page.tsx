@@ -1,7 +1,9 @@
 "use client"
 
+import Link from "next/link"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
     Bell,
     Calendar,
@@ -20,6 +22,7 @@ import {
     Users,
     X,
 } from "lucide-react"
+import { auth } from "@/lib/firebase"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -31,14 +34,19 @@ import type { InvitationSummary } from "@/lib/invitations"
 import type { Guest } from "@/lib/guest-lists"
 
 export function GuestListPage({ invitation, guests }: { invitation: InvitationSummary; guests: Guest[] }) {
+    const isPublished = invitation.status === "active"
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [selectedGuests, setSelectedGuests] = useState<string[]>([])
-    const [eventDate, setEventDate] = useState(invitation.date)
-    const [eventTime, setEventTime] = useState(invitation.time)
+    const [inviteEmails, setInviteEmails] = useState<string[]>([])
+    const [newInviteEmail, setNewInviteEmail] = useState("")
+    const [isSendingInvites, setIsSendingInvites] = useState(false)
+    const [inviteStatus, setInviteStatus] = useState<string | null>(null)
+    const [eventDate, setEventDate] = useState(() => (isPublished ? invitation.date : ""))
+    const [eventTime, setEventTime] = useState(() => (isPublished ? invitation.time : ""))
     const [isEditingSchedule, setIsEditingSchedule] = useState(false)
 
-    const daysUntilEvent = getDaysUntilEvent(eventDate)
+    const daysUntilEvent = isPublished ? getDaysUntilEvent(eventDate) : null
     const confirmed = guests.filter((guest) => guest.status === "confirmed").length
     const pending = guests.filter((guest) => guest.status === "pending").length
     const declined = guests.filter((guest) => guest.status === "declined").length
@@ -65,6 +73,68 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
         }
     }
 
+    const addInviteEmail = () => {
+        const email = newInviteEmail.trim().toLowerCase()
+
+        if (!email || !email.includes("@") || inviteEmails.includes(email)) {
+            return
+        }
+
+        setInviteEmails((previous) => [...previous, email])
+        setNewInviteEmail("")
+        setInviteStatus(null)
+    }
+
+    const removeInviteEmail = (email: string) => {
+        setInviteEmails((previous) => previous.filter((value) => value !== email))
+    }
+
+    const handleSendInvites = async () => {
+        if (inviteEmails.length === 0) {
+            return
+        }
+
+        try {
+            setIsSendingInvites(true)
+            setInviteStatus(null)
+
+            const user = auth.currentUser
+            if (!user) {
+                setInviteStatus("You need to sign in again before sending invitations.")
+                return
+            }
+
+            const token = await user.getIdToken()
+            const response = await fetch("/api/invitations/send", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    eventId: invitation.id,
+                    emails: inviteEmails,
+                    subject: `You're invited to ${invitation.title}`,
+                    message: `I'd love for you to join ${invitation.title}. Please review the invitation and RSVP when you can.`,
+                }),
+            })
+
+            if (!response.ok) {
+                setInviteStatus("Unable to send invitations right now. Please try again.")
+                return
+            }
+
+            setInviteEmails([])
+            setNewInviteEmail("")
+            setInviteStatus(`Sent ${inviteEmails.length} invitation${inviteEmails.length === 1 ? "" : "s"}.`)
+        } catch (error) {
+            console.error("Failed to send invitations:", error)
+            setInviteStatus("Something went wrong while sending invitations.")
+        } finally {
+            setIsSendingInvites(false)
+        }
+    }
+
     return (
         <div className="relative min-h-[calc(100vh-3.5rem)] overflow-hidden bg-background">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-gradient-to-b from-primary/10 via-accent/5 to-transparent" />
@@ -81,14 +151,22 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
                         <div>
                             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{invitation.title}</h1>
                             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                                <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/40 px-3 py-1">
-                                    <Calendar className="w-4 h-4 text-primary" />
-                                    {eventDate}
-                                </span>
-                                <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/40 px-3 py-1">
-                                    <Clock className="w-4 h-4 text-accent" />
-                                    {eventTime}
-                                </span>
+                                {isPublished ? (
+                                    <>
+                                        <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/40 px-3 py-1">
+                                            <Calendar className="w-4 h-4 text-primary" />
+                                            {eventDate}
+                                        </span>
+                                        <span className="flex items-center gap-1.5 rounded-full border border-border/60 bg-background/40 px-3 py-1">
+                                            <Clock className="w-4 h-4 text-accent" />
+                                            {eventTime}
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="rounded-full border border-dashed border-border/60 bg-background/30 px-3 py-1 text-xs text-muted-foreground">
+                                        Schedule hidden until published
+                                    </span>
+                                )}
                                 <Button
                                     type="button"
                                     variant="ghost"
@@ -127,13 +205,17 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
                         </div>
 
                         <div className="flex items-center gap-6 rounded-2xl border border-border/60 bg-background/50 px-5 py-4 shadow-lg">
-                            <div className="min-w-24 text-center">
-                                <p className="text-4xl font-semibold gradient-text">{daysUntilEvent}</p>
-                                <p className="text-xs text-muted-foreground">
-                                    {Number(daysUntilEvent) === 1 ? "day until event" : "days until event"}
-                                </p>
-                            </div>
-                            <div className="h-14 w-px bg-border/80" />
+                            {isPublished && daysUntilEvent !== null ? (
+                                <>
+                                    <div className="min-w-24 text-center">
+                                        <p className="text-4xl font-semibold gradient-text">{daysUntilEvent}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {Number(daysUntilEvent) === 1 ? "day until event" : "days until event"}
+                                        </p>
+                                    </div>
+                                    <div className="h-14 w-px bg-border/80" />
+                                </>
+                            ) : null}
                             <div className="space-y-2">
                                 <div className="flex items-center gap-2 text-sm">
                                     <div className="h-2 w-2 rounded-full bg-accent" />
@@ -149,6 +231,78 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                <div className="mb-8 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+                    <div className="rounded-2xl border border-border/60 bg-card/90 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Invite more people</p>
+                                <h2 className="mt-1 text-xl font-semibold tracking-tight">Send new invitations from this page</h2>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="rounded-xl border-border/60 bg-background/40 backdrop-blur hover:bg-secondary"
+                                asChild
+                            >
+                                <Link href={`/publish?event=${encodeURIComponent(invitation.id)}&title=${encodeURIComponent(invitation.title)}`}>
+                                    Open publish flow
+                                </Link>
+                            </Button>
+                        </div>
+
+                        <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+                            <Input
+                                type="email"
+                                placeholder="Enter an email address"
+                                value={newInviteEmail}
+                                onChange={(event) => setNewInviteEmail(event.target.value)}
+                                onKeyDown={(event) => event.key === "Enter" && addInviteEmail()}
+                                className="flex-1 rounded-xl border-border/60 bg-background/60"
+                            />
+                            <Button type="button" onClick={addInviteEmail} className="rounded-xl">
+                                <Mail className="mr-2 h-4 w-4" />
+                                Add recipient
+                            </Button>
+                        </div>
+
+                        {inviteEmails.length > 0 && (
+                            <div className="mt-4 flex flex-wrap gap-2">
+                                {inviteEmails.map((email) => (
+                                    <button
+                                        key={email}
+                                        type="button"
+                                        onClick={() => removeInviteEmail(email)}
+                                        className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-secondary/70 px-3 py-1.5 text-sm text-foreground transition-colors hover:bg-secondary"
+                                    >
+                                        <span>{email}</span>
+                                        <X className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {inviteStatus && <p className="mt-4 text-sm text-muted-foreground">{inviteStatus}</p>}
+                    </div>
+
+                    <div className="rounded-2xl border border-border/60 bg-gradient-to-br from-primary/10 via-background to-accent/10 p-6 shadow-2xl shadow-black/20 backdrop-blur-xl">
+                        <p className="text-sm font-medium text-muted-foreground">Quick actions</p>
+                        <div className="mt-3 space-y-3 text-sm text-muted-foreground">
+                            <p>Send invitations to the emails you add here, or jump into the full publish flow for link sharing.</p>
+                            <p>{inviteEmails.length} recipient{inviteEmails.length === 1 ? "" : "s"} ready to send.</p>
+                        </div>
+                        <Button
+                            type="button"
+                            className="mt-5 w-full rounded-xl border-0 bg-gradient-to-r from-primary via-accent to-chart-3 text-white shadow-lg shadow-primary/20"
+                            disabled={inviteEmails.length === 0 || isSendingInvites}
+                            onClick={handleSendInvites}
+                        >
+                            <Send className="mr-2 h-4 w-4" />
+                            {isSendingInvites ? "Sending..." : "Send invitations"}
+                        </Button>
                     </div>
                 </div>
 

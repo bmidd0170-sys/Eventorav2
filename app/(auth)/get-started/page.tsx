@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, User, Check } from "lucide-react"
-import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, onAuthStateChanged, updateProfile } from 'firebase/auth'
+import { createUserWithEmailAndPassword, GoogleAuthProvider, getRedirectResult, signInWithRedirect, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import { saveCurrentUserProfile } from '@/lib/profile'
 
 export default function GetStartedPage() {
   const router = useRouter()
@@ -17,6 +18,7 @@ export default function GetStartedPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [step, setStep] = useState<"signup" | "details">("signup")
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
+  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -27,11 +29,39 @@ export default function GetStartedPage() {
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.push('/home')
+      if (user && !isCheckingRedirect) {
+        window.location.replace('/home')
       }
     })
-  }, [router])
+  }, [router, isCheckingRedirect])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function handleRedirectResult() {
+      try {
+        const userCredential = await getRedirectResult(auth)
+        if (!isActive || !userCredential?.user) return
+
+        await saveCurrentUserProfile({
+          displayName: userCredential.user.displayName || userCredential.user.email?.split("@")[0] || null,
+          photoUrl: userCredential.user.photoURL || null,
+        })
+
+        window.location.replace('/home')
+      } catch (err: any) {
+        alert(err?.message || 'Google sign-in failed')
+      } finally {
+        if (isActive) setIsCheckingRedirect(false)
+      }
+    }
+
+    void handleRedirectResult()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,11 +73,9 @@ export default function GetStartedPage() {
 
     setIsLoading(true)
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { displayName: formData.name })
-      }
-      router.push('/home')
+      await createUserWithEmailAndPassword(auth, formData.email, formData.password)
+      await saveCurrentUserProfile({ displayName: formData.name })
+      window.location.replace('/home')
     } catch (err: any) {
       alert(err?.message || 'Failed to create account')
     } finally {
@@ -56,6 +84,11 @@ export default function GetStartedPage() {
   }
 
   async function handleGoogleSignIn() {
+    if (!formData.agreeToTerms) {
+      alert('Please agree to the Terms of Service and Privacy Policy before continuing with Google.')
+      return
+    }
+
     try {
       const provider = new GoogleAuthProvider()
       await signInWithRedirect(auth, provider)
@@ -119,7 +152,13 @@ export default function GetStartedPage() {
             <>
               {/* Social sign up */}
               <div className="space-y-3 mb-6">
-                <Button variant="outline" className="w-full h-12 text-base" type="button" onClick={handleGoogleSignIn}>
+                <Button
+                  variant="outline"
+                  className="w-full h-12 text-base"
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={!formData.agreeToTerms}
+                >
                   <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                     <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -128,6 +167,9 @@ export default function GetStartedPage() {
                   </svg>
                   Continue with Google
                 </Button>
+                <p className="text-xs text-muted-foreground text-center leading-relaxed px-2">
+                  Please check the Terms of Service and Privacy Policy box before continuing with Google.
+                </p>
               </div>
 
               <div className="relative mb-6">

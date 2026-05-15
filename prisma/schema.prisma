@@ -11,20 +11,89 @@ datasource db {
 }
 
 model User {
-  id               String    @id @default(cuid())
-  firebaseUid      String    @unique
-  email            String    @unique
-  displayName      String?
-  photoUrl         String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                    String    @id @default(cuid())
+  firebaseUid           String    @unique
+  email                 String    @unique
+  displayName           String?
+  photoUrl              String?
+  hasCompletedTutorial  Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  events           Event[]
-  invitations      Invitation[]
-  guestLists       GuestList[]
+  events                Event[]
+  invitations           Invitation[]
+  guestLists            GuestList[]
+  notificationSettings  UserNotificationSettings?
+  socialConnections     SocialConnection[]
+  connectedSocialConnections SocialConnection[] @relation("ConnectedUser")
+  connectionRequestsSent ConnectionRequest[] @relation("ConnectionRequestsSent")
+  connectionRequestsReceived ConnectionRequest[] @relation("ConnectionRequestsReceived")
 
   @@index([firebaseUid])
   @@index([email])
+}
+
+model UserNotificationSettings {
+  id                       String   @id @default(cuid())
+  userId                   String   @unique
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  emailRsvp                Boolean  @default(true)
+  emailReminders           Boolean  @default(true)
+  emailSecurity            Boolean  @default(true)
+  emailMarketing           Boolean  @default(false)
+  emailConnectionsRequests Boolean  @default(true)
+  emailConnectionsAccepted Boolean  @default(true)
+  pushRsvp                 Boolean  @default(true)
+  pushReminders            Boolean  @default(true)
+  pushTips                 Boolean  @default(false)
+  pushConnectionsRequests  Boolean  @default(true)
+  pushConnectionsAccepted  Boolean  @default(true)
+
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model SocialConnection {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connectedUserId    String
+  connectedUser      User     @relation("ConnectedUser", fields: [connectedUserId], references: [id], onDelete: Cascade)
+  connectedUserName  String
+  connectedUserEmail String
+
+  status             String   @default("accepted") // accepted, blocked
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([userId, connectedUserId])
+  @@index([userId])
+  @@index([connectedUserId])
+  @@index([status])
+}
+
+model ConnectionRequest {
+  id               String   @id @default(cuid())
+  fromUserId       String
+  fromUser         User     @relation("ConnectionRequestsSent", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUserId         String
+  toUser           User     @relation("ConnectionRequestsReceived", fields: [toUserId], references: [id], onDelete: Cascade)
+  fromUserName     String
+  fromUserEmail    String
+
+  status           String   @default("pending") // pending, accepted, rejected
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([fromUserId, toUserId])
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([status])
 }
 
 model Event {

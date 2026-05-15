@@ -161,11 +161,12 @@
 
 /* Custom gradient utilities */
 .gradient-primary {
-  background: linear-gradient(135deg, oklch(0.55 0.25 280) 0%, oklch(0.65 0.22 320) 50%, oklch(0.60 0.18 240) 100%);
+  /* Use brand variables when available, fall back to existing theme colors */
+  background: linear-gradient(135deg, var(--brand-primary, oklch(0.55 0.25 280)) 0%, color-mix(in srgb, var(--brand-primary, oklch(0.65 0.22 320)) 60%, var(--brand-accent, oklch(0.60 0.18 240)) 40%) 50%, var(--brand-accent, oklch(0.60 0.18 240)) 100%);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, oklch(0.75 0.20 280) 0%, oklch(0.80 0.18 330) 50%, oklch(0.70 0.15 240) 100%);
+  background: linear-gradient(135deg, var(--brand-primary, oklch(0.75 0.20 280)) 0%, color-mix(in srgb, var(--brand-primary, oklch(0.80 0.18 330)) 60%, var(--brand-accent, oklch(0.70 0.15 240)) 40%) 50%, var(--brand-accent, oklch(0.70 0.15 240)) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -196,4 +197,14 @@
 /* Smooth transitions */
 .transition-smooth {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Invitation branding variables */
+.invitation-root {
+  --brand-primary: var(--brand-primary, var(--primary));
+  --brand-secondary: var(--brand-secondary, var(--chart-3));
+  --brand-accent: var(--brand-accent, var(--accent));
+  --brand-heading-color: var(--brand-heading-color, var(--primary));
+  --brand-font-heading: var(--brand-font-heading, var(--font-sans));
+  --brand-font-body: var(--brand-font-body, var(--font-sans));
 }

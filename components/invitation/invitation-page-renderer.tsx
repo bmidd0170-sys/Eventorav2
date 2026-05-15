@@ -4,6 +4,7 @@ import { useState } from "react"
 import type { CSSProperties, ElementType, ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
+import { useBrand } from "@/components/brand/brand-provider"
 import {
     Calendar,
     ChevronRight,
@@ -96,6 +97,7 @@ export function InvitationPageRenderer({
     rsvpResponse?: "attending" | "not-attending" | null
     setRsvpResponse?: (response: "attending" | "not-attending" | null) => void
 }) {
+    const { brand } = useBrand()
     const [localRsvpResponse, setLocalRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
 
     if (!page) {
@@ -104,24 +106,29 @@ export function InvitationPageRenderer({
 
     const activeRsvpResponse = rsvpResponse ?? localRsvpResponse
     const updateRsvpResponse = setRsvpResponse ?? setLocalRsvpResponse
-    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse)
+    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, brand)
 
     return (
-        <>
+        <div className="invitation-root">
             {pageContent}
             <InvitationElements elements={page.content.elements} />
-        </>
+        </div>
     )
 }
 
 function renderPage(
     page: InvitationPageLike,
     rsvpResponse: "attending" | "not-attending" | null,
-    setRsvpResponse: (response: "attending" | "not-attending" | null) => void
+    setRsvpResponse: (response: "attending" | "not-attending" | null) => void,
+    brand?: {
+        defaultHeadline?: string
+        defaultSubheadline?: string
+        defaultCtaLabel?: string
+    } | null
 ): ReactNode {
     switch (page.type) {
         case "cover":
-            return <CoverPage content={page.content} icon={page.icon ?? FileText} />
+            return <CoverPage content={page.content} icon={page.icon ?? FileText} brand={brand} />
         case "details":
             return <DetailsPage content={page.content} />
         case "rsvp":
@@ -257,26 +264,47 @@ function InvitationElementRenderer({ element }: { element: InvitationElement }) 
     )
 }
 
-function CoverPage({ content, icon: Icon }: { content: InvitationPageContent; icon: ElementType }) {
+function CoverPage({
+    content,
+    icon: Icon,
+    brand,
+}: {
+    content: InvitationPageContent
+    icon: ElementType
+    brand?: {
+        defaultHeadline?: string
+        defaultSubheadline?: string
+        defaultCtaLabel?: string
+    } | null
+}) {
+    const headline = content.headline || brand?.defaultHeadline || "You're Invited"
+    const subheadline = content.subheadline || brand?.defaultSubheadline || "to a Special Event"
+    const ctaLabel = brand?.defaultCtaLabel || "View Details"
+
     return (
         <div className="relative min-h-[400px] flex flex-col items-center justify-center text-center p-6 md:p-8">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-accent/10 to-chart-3/20" />
+            <div
+                className="absolute inset-0"
+                style={{
+                    background: "linear-gradient(135deg, color-mix(in srgb, var(--brand-primary, var(--primary)) 20%, transparent), color-mix(in srgb, var(--brand-accent, var(--accent)) 10%, transparent), color-mix(in srgb, var(--brand-secondary, var(--chart-3)) 20%, transparent))",
+                }}
+            />
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(255,255,255,0.08),transparent_70%)]" />
 
-            <div className="absolute top-6 left-6 w-12 h-12 border border-primary/20 rounded-full" />
-            <div className="absolute bottom-8 right-8 w-16 h-16 border border-accent/20 rounded-full" />
+            <div className="absolute top-6 left-6 w-12 h-12 rounded-full" style={{ border: "1px solid color-mix(in srgb, var(--brand-primary, var(--primary)) 20%, transparent)" }} />
+            <div className="absolute bottom-8 right-8 w-16 h-16 rounded-full" style={{ border: "1px solid color-mix(in srgb, var(--brand-accent, var(--accent)) 20%, transparent)" }} />
 
             <div className="relative z-10 space-y-4">
                 <div className="w-14 h-14 mx-auto rounded-2xl gradient-primary flex items-center justify-center mb-6">
                     <Icon className="w-7 h-7 text-white" />
                 </div>
 
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground via-foreground to-muted-foreground bg-clip-text text-balance">
-                    {content.headline || "You're Invited"}
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-clip-text text-balance" style={{ color: 'var(--brand-heading-color)', fontFamily: 'var(--brand-font-heading)' }}>
+                    {headline}
                 </h1>
 
-                <p className="text-lg text-muted-foreground">
-                    {content.subheadline || "to a Special Event"}
+                <p className="text-lg text-muted-foreground" style={{ fontFamily: 'var(--brand-font-body)' }}>
+                    {subheadline}
                 </p>
 
                 {content.hostName && (
@@ -287,8 +315,8 @@ function CoverPage({ content, icon: Icon }: { content: InvitationPageContent; ic
                 )}
 
                 <div className="pt-6">
-                    <Button className="gradient-primary border-0 text-white px-6">
-                        View Details
+                    <Button className="border-0 text-white px-6" style={{ background: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' }}>
+                        {ctaLabel}
                         <ChevronRight className="w-4 h-4 ml-2" />
                     </Button>
                 </div>

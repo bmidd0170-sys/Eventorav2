@@ -2,6 +2,62 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { jwtDecode } from "jwt-decode"
 
+async function getOrCreateDbUser(decodedToken: any) {
+  const firebaseUid = decodedToken.sub
+  if (!firebaseUid) {
+    return null
+  }
+
+  let dbUser = await prisma.user.findUnique({ where: { firebaseUid } })
+  if (dbUser) {
+    return dbUser
+  }
+
+  const userEmail = decodedToken.email || `user+${firebaseUid}@example.com`
+
+  const findExistingUser = async () => {
+    const existingByUid = await prisma.user.findUnique({ where: { firebaseUid } })
+    if (existingByUid) {
+      return existingByUid
+    }
+
+    const existingByEmail = await prisma.user.findUnique({ where: { email: userEmail } })
+    if (existingByEmail) {
+      if (existingByEmail.firebaseUid) {
+        return existingByEmail
+      }
+
+      return prisma.user.update({
+        where: { email: userEmail },
+        data: { firebaseUid },
+      })
+    }
+
+    return null
+  }
+
+  try {
+    return await prisma.user.create({
+      data: {
+        firebaseUid,
+        email: userEmail,
+        displayName: decodedToken.name || "User",
+      },
+    })
+  } catch (createError: any) {
+    if (createError.code === "P2002") {
+      const existingUser = await findExistingUser()
+      if (existingUser) {
+        return existingUser
+      }
+
+      return null
+    }
+
+    throw createError
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const authHeader = req.headers.get("authorization")
@@ -22,7 +78,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const dbUser = await prisma.user.findUnique({ where: { firebaseUid } })
+    const dbUser = await getOrCreateDbUser(decodedToken)
     if (!dbUser) {
       return NextResponse.json({ events: [] }, { status: 200 })
     }
@@ -52,6 +108,7 @@ export async function POST(req: NextRequest) {
       status: e.status === 'published' ? 'active' : 'draft',
       guests: { confirmed: 0, total: 0 },
       reminder: false,
+      updatedAt: e.updatedAt.toISOString(),
     }))
 
     return NextResponse.json({ events: mapped }, { status: 200 })

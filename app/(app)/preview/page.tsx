@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { defaultInvitationId } from "@/lib/invitations"
 import { InvitationPageRenderer as SharedInvitationPageRenderer } from "@/components/invitation/invitation-page-renderer"
 import {
   ChevronLeft,
@@ -192,7 +193,27 @@ export default function PreviewPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.back()}
+            onClick={() => {
+              try {
+                // Prefer the event id from preview data so we go to the same event's guest list
+                const stored = localStorage.getItem("eventora-preview-data")
+                const preview = stored ? JSON.parse(stored) : null
+                const previewId = preview?.id || defaultInvitationId
+
+                const isTutorialOpen = localStorage.getItem("eventora-tutorial-is-open") === "true"
+                const currentStep = parseInt(localStorage.getItem("eventora-tutorial-current-step") || "-1", 10)
+                // If tutorial is active and currently on the preview step (index 3), advance to step 4
+                if (isTutorialOpen && currentStep === 3) {
+                  localStorage.setItem("eventora-tutorial-current-step", "4")
+                  router.push(`/guest-list/${previewId}`)
+                  return
+                }
+              } catch (e) {
+                /* ignore */
+              }
+
+              router.back()
+            }}
             className="border-border/50"
           >
             Exit Preview

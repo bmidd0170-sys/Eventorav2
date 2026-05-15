@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithRedirect, onAuthStateChanged } from 'firebase/auth'
+import { signInWithEmailAndPassword, GoogleAuthProvider, getRedirectResult, signInWithRedirect, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
 export default function SignInPage() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -23,18 +24,40 @@ export default function SignInPage() {
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
-      if (user) {
-        router.push('/home')
+      if (user && !isCheckingRedirect) {
+        window.location.replace('/home')
       }
     })
-  }, [router])
+  }, [router, isCheckingRedirect])
+
+  useEffect(() => {
+    let isActive = true
+
+    async function handleRedirectResult() {
+      try {
+        const userCredential = await getRedirectResult(auth)
+        if (!isActive || !userCredential?.user) return
+        window.location.replace('/home')
+      } catch (err: any) {
+        alert(err?.message || 'Google sign-in failed')
+      } finally {
+        if (isActive) setIsCheckingRedirect(false)
+      }
+    }
+
+    void handleRedirectResult()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     try {
       await signInWithEmailAndPassword(auth, formData.email, formData.password)
-      router.push('/home')
+      window.location.replace('/home')
     } catch (err: any) {
       const msg = err?.message || 'Failed to sign in'
       alert(msg)

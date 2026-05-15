@@ -3,9 +3,13 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { signOut, onAuthStateChanged } from "firebase/auth"
+import { signOut, onAuthStateChanged, deleteUser, reauthenticateWithCredential, EmailAuthProvider, GoogleAuthProvider, reauthenticateWithPopup } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import { getUserNotificationSettings, saveUserNotificationSettings, type NotificationSettings } from '@/lib/notifications'
+import { getUserNotificationSettings, saveUserNotificationSettings } from '@/lib/notifications'
+import { getCurrentUserProfile, saveCurrentUserProfile } from "@/lib/profile"
+import { type NotificationSettings } from "@/lib/notification-settings"
+import { getUserBranding, type BrandSettings as BrandKitSettings } from "@/lib/branding"
+import { useBrand } from "@/components/brand/brand-provider"
 import { useToast } from '@/hooks/use-toast'
 import {
   getConnections,
@@ -34,6 +38,17 @@ import {
   Mail,
   X
 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 
 type Tab = "profile" | "brand" | "notifications" | "privacy" | "connections"
 
@@ -89,14 +104,28 @@ export default function SettingsPage() {
 
 function ProfileSettings() {
   const router = useRouter()
+  const { toast } = useToast()
   const [name, setName] = useState<string>("")
   const [email, setEmail] = useState<string>("")
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      setEmail(user.email || "")
+
+      try {
+        const profile = await getCurrentUserProfile()
+        setName(profile.displayName || user.displayName || user.email?.split("@")[0] || "")
+      } catch {
         setName(user.displayName || user.email?.split("@")[0] || "")
-        setEmail(user.email || "")
+      } finally {
+        setLoading(false)
       }
     })
 
@@ -150,14 +179,33 @@ function ProfileSettings() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              readOnly
+              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm opacity-80"
             />
           </div>
 
           <div className="flex justify-end mt-6">
-            <Button className="gradient-primary border-0 text-white">
-              Save Changes
+            <Button
+              className="gradient-primary border-0 text-white"
+              disabled={loading || saving}
+              onClick={async () => {
+                if (saving) {
+                  return
+                }
+
+                setSaving(true)
+                try {
+                  await saveCurrentUserProfile({ displayName: name })
+                  toast({ title: "Saved", description: "Profile updated in Neon" })
+                } catch (error) {
+                  console.error("Failed to save profile", error)
+                  toast({ title: "Error", description: "Failed to save profile", variant: "destructive" })
+                } finally {
+                  setSaving(false)
+                }
+              }}
+            >
+              {saving ? "Saving…" : "Save Changes"}
             </Button>
           </div>
         </div>
@@ -183,6 +231,11 @@ function ProfileSettings() {
 }
 
 function BrandSettings() {
+  const { toast } = useToast()
+  const { setBrand } = useBrand()
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [colors, setColors] = useState([
     { id: "1", name: "Primary", value: "#9333ea" },
     { id: "2", name: "Secondary", value: "#ec4899" },
@@ -193,6 +246,72 @@ function BrandSettings() {
     { id: "1", name: "Heading", value: "Poppins" },
     { id: "2", name: "Body", value: "Inter" },
   ])
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setCurrentUserId(null)
+        setLoading(false)
+        return
+      }
+
+      setCurrentUserId(user.uid)
+      setLoading(true)
+
+      try {
+        const brand = await getUserBranding(user.uid)
+        setColors([
+          { id: "1", name: "Primary", value: brand.primaryColor || "#9333ea" },
+          { id: "2", name: "Secondary", value: brand.secondaryColor || "#ec4899" },
+          { id: "3", name: "Accent", value: brand.accentColor || "#3b82f6" },
+        ])
+        setFonts([
+          { id: "1", name: "Heading", value: brand.headingFont || "Poppins" },
+          { id: "2", name: "Body", value: brand.bodyFont || "Inter" },
+        ])
+      } catch (error) {
+        console.warn("Failed to load brand settings", error)
+      } finally {
+        setLoading(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const handleSaveBrandKit = async () => {
+    if (!currentUserId) {
+      toast({
+        title: "Error",
+        description: "You must be signed in to save your brand kit",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const nextBrand: BrandKitSettings = {
+      primaryColor: colors[0]?.value,
+      secondaryColor: colors[1]?.value,
+      accentColor: colors[2]?.value,
+      headingFont: fonts.find((font) => font.name === "Heading")?.value,
+      bodyFont: fonts.find((font) => font.name === "Body")?.value,
+    }
+
+    setSaving(true)
+    try {
+      await setBrand(nextBrand)
+      toast({ title: "Saved", description: "Brand kit saved" })
+    } catch (error) {
+      console.error("Failed to save brand kit", error)
+      toast({
+        title: "Error",
+        description: "Failed to save brand kit",
+        variant: "destructive",
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -288,8 +407,12 @@ function BrandSettings() {
       </section>
 
       <div className="flex justify-end">
-        <Button className="gradient-primary border-0 text-white">
-          Save Brand Kit
+        <Button
+          className="gradient-primary border-0 text-white"
+          disabled={loading || saving}
+          onClick={handleSaveBrandKit}
+        >
+          {saving ? "Saving…" : "Save Brand Kit"}
         </Button>
       </div>
     </div>
@@ -745,12 +868,96 @@ function ConnectionsSettings() {
 }
 
 function PrivacySettings() {
+  const router = useRouter()
+  const { toast } = useToast()
+
   const [settings, setSettings] = useState({
     profilePublic: false,
     showActivity: true,
     allowAnalytics: true,
     // twoFactor removed per request
   })
+
+  const [deleting, setDeleting] = useState(false)
+  const [reauthNeeded, setReauthNeeded] = useState(false)
+  const [reauthLoading, setReauthLoading] = useState(false)
+  const [reauthPassword, setReauthPassword] = useState("")
+  const [reauthError, setReauthError] = useState<string | null>(null)
+  const [serverDeleted, setServerDeleted] = useState(false)
+
+  async function handleDeleteAccount() {
+    if (!auth.currentUser) {
+      toast({ title: 'Error', description: 'You must be signed in to delete your account', variant: 'destructive' })
+      return
+    }
+    setDeleting(true)
+    try {
+      // Only call server delete once
+      if (!serverDeleted) {
+        const idToken = await auth.currentUser.getIdToken(true)
+        const res = await fetch('/api/account/delete', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          throw new Error(text || 'Failed to delete account on server')
+        }
+
+        setServerDeleted(true)
+      }
+
+      // Now delete the Firebase Auth user (requires recent login)
+      await deleteUser(auth.currentUser)
+
+      toast({ title: 'Account deleted', description: 'Your account and data have been removed' })
+      router.push('/')
+    } catch (err: any) {
+      console.error('Failed to delete account', err)
+      const code = err?.code
+      if (code === 'auth/requires-recent-login' || code === 'auth/user-token-expired') {
+        setReauthNeeded(true)
+        return
+      }
+
+      const message = err?.message || 'Failed to delete account'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  async function deleteAuthUserAndRedirect() {
+    if (!auth.currentUser) return
+    try {
+      await deleteUser(auth.currentUser)
+      toast({ title: 'Account deleted', description: 'Your account and data have been removed' })
+      router.push('/')
+    } catch (err: any) {
+      console.error('Failed to delete auth user after reauth', err)
+      toast({ title: 'Error', description: err?.message || 'Failed to delete auth user', variant: 'destructive' })
+    }
+  }
+
+  async function retryDeleteAccountAfterReauth() {
+    if (!auth.currentUser) return
+    setDeleting(true)
+    try {
+      // Retry deleting the Firebase Auth user after successful reauthentication
+      await deleteUser(auth.currentUser)
+      toast({ title: 'Account deleted', description: 'Your account and data have been removed' })
+      router.push('/')
+    } catch (err: any) {
+      console.error('Failed to delete account after reauthentication', err)
+      const message = err?.message || 'Failed to delete account'
+      toast({ title: 'Error', description: message, variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -784,14 +991,130 @@ function PrivacySettings() {
           {/* Two-Factor and Active Sessions removed per request */}
 
           <div className="pt-4 border-t border-border/50">
-            <button className="flex items-center justify-between w-full py-2 text-left group">
-              <div>
-                <p className="font-medium text-destructive">Delete Account</p>
-                <p className="text-sm text-muted-foreground">Permanently delete your account and all data</p>
-              </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-destructive transition-smooth" />
-            </button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  className="flex items-center justify-between w-full py-2 text-left group"
+                >
+                  <div>
+                    <p className="font-medium text-destructive">Delete Account</p>
+                    <p className="text-sm text-muted-foreground">Permanently delete your account and all data</p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-destructive transition-smooth" />
+                </button>
+              </AlertDialogTrigger>
+
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete your account and all associated data. This action cannot be undone. Are you sure you want to proceed?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAccount}
+                    className="border-destructive/30 text-destructive"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete Account'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
+
+          {/* Reauthentication modal shown when token expired or recent-login required */}
+          <AlertDialog 
+            open={reauthNeeded} 
+            onOpenChange={(open) => {
+              setReauthNeeded(open)
+              if (!open) {
+                // Clear modal state when closing
+                setReauthPassword('')
+                setReauthError(null)
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Re-authenticate to continue</AlertDialogTitle>
+                <AlertDialogDescription>
+                  For your security, please re-enter your credentials to confirm account deletion.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+
+              <div className="mt-4 space-y-3">
+                <label className="text-sm block mb-2">Password</label>
+                <input
+                  type="password"
+                  value={reauthPassword}
+                  onChange={(e) => setReauthPassword(e.target.value)}
+                  className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                {reauthError && <p className="text-sm text-destructive mt-2">{reauthError}</p>}
+              </div>
+
+              {/* Offer Google re-auth if current user signed in with Google */}
+              {auth.currentUser?.providerData?.some((p) => p.providerId === 'google.com') && (
+                <div className="mt-2">
+                  <p className="text-sm text-muted-foreground mb-2">Or re-sign in with Google</p>
+                  <button
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-sm disabled:opacity-50"
+                    disabled={reauthLoading}
+                    onClick={async () => {
+                      try {
+                        setReauthLoading(true)
+                        const provider = new GoogleAuthProvider()
+                        await reauthenticateWithPopup(auth.currentUser!, provider)
+                        setReauthNeeded(false)
+                        setReauthPassword('')
+                        setReauthError(null)
+                        // Retry deletion after successful reauthentication
+                        await retryDeleteAccountAfterReauth()
+                      } catch (e: any) {
+                        console.error('Google reauth failed', e)
+                        setReauthError(e?.message || 'Google reauthentication failed')
+                      } finally {
+                        setReauthLoading(false)
+                      }
+                    }}
+                  >
+                    Continue with Google
+                  </button>
+                </div>
+              )}
+
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setReauthNeeded(false)}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={reauthLoading}
+                    onClick={async () => {
+                      if (!auth.currentUser) return
+                      setReauthLoading(true)
+                      setReauthError(null)
+                      try {
+                        const email = auth.currentUser.email || ''
+                        const cred = EmailAuthProvider.credential(email, reauthPassword)
+                        await reauthenticateWithCredential(auth.currentUser, cred)
+                        setReauthNeeded(false)
+                        setReauthPassword('')
+                        // Retry deletion after successful reauthentication
+                        await retryDeleteAccountAfterReauth()
+                      } catch (e: any) {
+                        console.error('Reauth failed', e)
+                        setReauthError(e?.message || 'Failed to reauthenticate')
+                      } finally {
+                        setReauthLoading(false)
+                      }
+                    }}
+                  >
+                    {reauthLoading ? 'Reauthenticating…' : 'Re-authenticate'}
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </section>
     </div>

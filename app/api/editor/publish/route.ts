@@ -49,15 +49,38 @@ export async function POST(req: NextRequest) {
 
     // Look up the database user by Firebase UID
     const firebaseUid = decodedToken.sub
-    const dbUser = await prisma.user.findUnique({
+    let dbUser = await prisma.user.findUnique({
       where: { firebaseUid }
     })
 
+    // If user doesn't exist, create them with minimal info
     if (!dbUser) {
-      return NextResponse.json(
-        { error: "User not found" },
-        { status: 403 }
-      )
+      const userEmail = decodedToken.email || `user+${firebaseUid}@example.com`
+      try {
+        dbUser = await prisma.user.create({
+          data: {
+            firebaseUid,
+            email: userEmail,
+            displayName: decodedToken.name || "User"
+          }
+        })
+      } catch (createError: any) {
+        // If unique constraint violation on email, find existing user by email and update firebaseUid
+        if (createError.code === 'P2002' && createError.meta?.target?.includes('email')) {
+          dbUser = await prisma.user.findUnique({
+            where: { email: userEmail }
+          })
+          if (dbUser && !dbUser.firebaseUid) {
+            // Update the existing user with the new Firebase UID
+            dbUser = await prisma.user.update({
+              where: { email: userEmail },
+              data: { firebaseUid }
+            })
+          }
+        } else {
+          throw createError
+        }
+      }
     }
 
     // Find the event and verify ownership

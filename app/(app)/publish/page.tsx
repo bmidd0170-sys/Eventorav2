@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { auth } from "@/lib/firebase"
 import { 
   Link2, 
   Mail, 
@@ -146,30 +147,50 @@ export default function PublishPage() {
   }
 
   const handleSendEmails = async () => {
-    if (!emailAddresses.length || !inviteLink) return
+    if (!emailAddresses.length || !inviteLink || !resolvedEventId) return
     
     const emailsToSend = activeMethod === "connections" 
       ? contacts.filter(c => c.selected).map(c => c.email)
       : emailAddresses
 
     try {
-      for (const email of emailsToSend) {
-        const htmlEmail = `
-          <p>${emailMessage.replace(/\n/g, '<br>')}</p>
-          <p><a href="${inviteLink}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">View Invitation</a></p>
-        `
-        
-        await fetch('/api/send-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: email,
-            subject: emailSubject,
-            text: `${emailMessage}\n\n${inviteLink}`,
-            html: htmlEmail,
-            fromName: titleFromParams,
-          }),
-        })
+      const user = auth.currentUser
+      if (!user) {
+        console.error('Not authenticated')
+        return
+      }
+
+      const token = await user.getIdToken()
+
+      // Send invitations via the new endpoint that creates database records
+      const response = await fetch('/api/invitations/send', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          eventId: resolvedEventId,
+          emails: emailsToSend,
+          subject: emailSubject,
+          message: emailMessage,
+        }),
+      })
+
+      if (!response.ok) {
+        console.error('Failed to send invitations:', response.statusText)
+        return
+      }
+
+      const result = await response.json()
+      console.log(`Successfully sent ${result.count} invitations`)
+      
+      // Clear the email list after sending
+      if (activeMethod === "email") {
+        setEmailAddresses([])
+        setNewEmail("")
+      } else if (activeMethod === "connections") {
+        setContacts(contacts.map(c => ({ ...c, selected: false })))
       }
     } catch (error) {
       console.error('Failed to send invitations:', error)

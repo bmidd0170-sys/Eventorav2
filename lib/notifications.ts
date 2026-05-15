@@ -1,50 +1,31 @@
-import { doc, getDoc, setDoc } from 'firebase/firestore'
-import { db } from './firebase'
-
-export type NotificationSettings = {
-  emailRsvp: boolean
-  emailReminders: boolean
-  emailSecurity: boolean
-  emailMarketing: boolean
-  emailConnectionsRequests: boolean
-  emailConnectionsAccepted: boolean
-  pushRsvp: boolean
-  pushReminders: boolean
-  pushTips: boolean
-  pushConnectionsRequests: boolean
-  pushConnectionsAccepted: boolean
-}
-
-export const defaultNotificationSettings: NotificationSettings = {
-  emailRsvp: true,
-  emailReminders: true,
-  emailSecurity: true,
-  emailMarketing: false,
-  emailConnectionsRequests: true,
-  emailConnectionsAccepted: true,
-  pushRsvp: true,
-  pushReminders: true,
-  pushTips: false,
-  pushConnectionsRequests: true,
-  pushConnectionsAccepted: true,
-}
+import { fetchWithAuth } from "@/lib/api-client"
+import { defaultNotificationSettings, type NotificationSettings } from "@/lib/notification-settings"
 
 export async function getUserNotificationSettings(userId: string): Promise<NotificationSettings> {
   try {
-    const ref = doc(db, 'userSettings', userId)
-    const snap = await getDoc(ref)
-    if (!snap.exists()) return defaultNotificationSettings
-    return { ...defaultNotificationSettings, ...(snap.data() as Partial<NotificationSettings>) }
+    const response = await fetchWithAuth("/api/notification-settings")
+    if (!response.ok) {
+      return defaultNotificationSettings
+    }
+
+    const data = (await response.json()) as { settings: NotificationSettings }
+    return { ...defaultNotificationSettings, ...data.settings }
   } catch (err) {
-    console.warn('Failed to load notification settings, using defaults', err)
+    console.warn('Failed to load notification settings', err)
     return defaultNotificationSettings
   }
 }
 
 export async function saveUserNotificationSettings(userId: string, settings: Partial<NotificationSettings>) {
   try {
-    const ref = doc(db, 'userSettings', userId)
-    await setDoc(ref, settings, { merge: true })
+    const response = await fetchWithAuth("/api/notification-settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    })
+
+    if (!response.ok) {
+      throw new Error("Failed to save notification settings")
+    }
   } catch (err) {
     console.error('Failed to save user notification settings', err)
     throw err
@@ -52,11 +33,16 @@ export async function saveUserNotificationSettings(userId: string, settings: Par
 }
 
 export async function sendEmailIfAllowed(userId: string, settingKey: keyof NotificationSettings, mail: { to: string; subject: string; text?: string; html?: string; fromName?: string }) {
-  const settings = await getUserNotificationSettings(userId)
+  let settings = defaultNotificationSettings
+  try {
+    settings = await getUserNotificationSettings(userId)
+  } catch (err) {
+    console.warn('Falling back to default notification settings for email send', err)
+  }
   if (!settings[settingKey]) return false
 
   try {
-    await fetch('/api/send-email', {
+    await fetchWithAuth('/api/send-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: mail.to, subject: mail.subject, text: mail.text, html: mail.html, fromName: mail.fromName }),

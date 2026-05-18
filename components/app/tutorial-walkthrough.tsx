@@ -7,7 +7,6 @@ import { onAuthStateChanged } from "firebase/auth"
 import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { auth } from "@/lib/firebase"
-import { defaultInvitationId } from "@/lib/invitations"
 import { fetchWithAuth } from "@/lib/api-client"
 import { getCurrentUserProfile } from "@/lib/profile"
 
@@ -18,6 +17,8 @@ type TutorialStep = {
   navHint: string
   route: string
 }
+
+const TUTORIAL_GUEST_LIST_EVENT_ID = "tutorial-preview"
 
 const tutorialSteps: TutorialStep[] = [
   {
@@ -58,7 +59,7 @@ const tutorialSteps: TutorialStep[] = [
     description:
       "The guest list keeps RSVP responses organized so you can see who is attending and who still needs a follow-up.",
     navHint: "Use Events to jump into a specific invitation, then open the guest list for that event.",
-    route: `/guest-list/${defaultInvitationId}`,
+    route: `/guest-list/${TUTORIAL_GUEST_LIST_EVENT_ID}`,
   },
   {
     id: "publish",
@@ -99,7 +100,9 @@ export function TutorialWalkthrough() {
   const currentStep = tutorialSteps[currentStepIndex]
   const isFinalStep = currentStepIndex === tutorialSteps.length - 1
 
-  const stepIndexForPath = tutorialSteps.findIndex((step) => step.route === pathname)
+  const stepIndexForPath = tutorialSteps.findIndex(
+    (step) => step.route === pathname || (step.id === "guest-list" && pathname.startsWith("/guest-list/")),
+  )
 
   useEffect(() => {
     let isActive = true

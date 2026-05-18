@@ -90,10 +90,12 @@ export interface InvitationPageLike {
 
 export function InvitationPageRenderer({
     page,
+    eventId,
     rsvpResponse,
     setRsvpResponse,
 }: {
     page: InvitationPageLike
+    eventId?: string
     rsvpResponse?: "attending" | "not-attending" | null
     setRsvpResponse?: (response: "attending" | "not-attending" | null) => void
 }) {
@@ -106,7 +108,7 @@ export function InvitationPageRenderer({
 
     const activeRsvpResponse = rsvpResponse ?? localRsvpResponse
     const updateRsvpResponse = setRsvpResponse ?? setLocalRsvpResponse
-    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, brand)
+    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, eventId, brand)
 
     return (
         <div className="invitation-root">
@@ -120,6 +122,7 @@ function renderPage(
     page: InvitationPageLike,
     rsvpResponse: "attending" | "not-attending" | null,
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void,
+    eventId?: string,
     brand?: {
         defaultHeadline?: string
         defaultSubheadline?: string
@@ -132,7 +135,7 @@ function renderPage(
         case "details":
             return <DetailsPage content={page.content} />
         case "rsvp":
-            return <RSVPPage content={page.content} rsvpResponse={rsvpResponse} setRsvpResponse={setRsvpResponse} />
+            return <RSVPPage content={page.content} eventId={eventId} rsvpResponse={rsvpResponse} setRsvpResponse={setRsvpResponse} />
         case "location":
             return <LocationPage content={page.content} />
         case "schedule":
@@ -389,14 +392,53 @@ function DetailsPage({ content }: { content: InvitationPageContent }) {
 
 function RSVPPage({
     content,
+    eventId,
     rsvpResponse,
     setRsvpResponse,
 }: {
     content: InvitationPageContent
+    eventId?: string
     rsvpResponse: "attending" | "not-attending" | null
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void
 }) {
     const [submitted, setSubmitted] = useState(false)
+    const [guestEmail, setGuestEmail] = useState("")
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState<string | null>(null)
+
+    const handleSubmit = async () => {
+        const trimmedEmail = guestEmail.trim().toLowerCase()
+        if (!eventId || !trimmedEmail || !rsvpResponse) {
+            setSubmitError("Please choose a response and enter your email address.")
+            return
+        }
+
+        setIsSubmitting(true)
+        setSubmitError(null)
+
+        try {
+            const response = await fetch("/api/invitations/respond", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    eventId,
+                    guestEmail: trimmedEmail,
+                    response: rsvpResponse,
+                }),
+            })
+
+            if (!response.ok) {
+                throw new Error("Failed to save RSVP")
+            }
+
+            setSubmitted(true)
+        } catch (error) {
+            console.error("Failed to submit RSVP", error)
+            setSubmitError("We could not save your RSVP right now. Please try again.")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
 
     if (submitted) {
         return (
@@ -415,6 +457,17 @@ function RSVPPage({
             <div className="text-center space-y-1">
                 <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "RSVP"}</h2>
                 {content.subheadline && <p className="text-muted-foreground text-sm">{content.subheadline}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Email address</label>
+                <input
+                    type="email"
+                    value={guestEmail}
+                    onChange={(event) => setGuestEmail(event.target.value)}
+                    className="w-full px-3 py-2 bg-secondary rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="you@example.com"
+                />
             </div>
 
             <div className="flex gap-3">
@@ -471,7 +524,7 @@ function RSVPPage({
                         </div>
                     ))}
 
-                    <Button className="w-full gradient-primary border-0 text-white py-5" onClick={() => setSubmitted(true)}>
+                    <Button className="w-full gradient-primary border-0 text-white py-5" disabled={isSubmitting} onClick={handleSubmit}>
                         Submit RSVP
                     </Button>
                 </div>
@@ -487,11 +540,14 @@ function RSVPPage({
                             placeholder="Sorry I can't make it..."
                         />
                     </div>
-                    <Button variant="outline" className="w-full py-5" onClick={() => setSubmitted(true)}>
+                    {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+                    <Button variant="outline" className="w-full py-5" disabled={isSubmitting} onClick={handleSubmit}>
                         Send Response
                     </Button>
                 </div>
             )}
+
+            {submitError && rsvpResponse === "attending" && <p className="text-sm text-destructive">{submitError}</p>}
         </div>
     )
 }

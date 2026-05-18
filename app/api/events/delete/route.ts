@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { jwtDecode } from "jwt-decode"
+import { buildEventCancelledEmail } from "@/lib/email-templates"
+import { sendEmail } from "@/lib/email"
+import { defaultNotificationSettings } from "@/lib/notification-settings"
 
 async function getOrCreateDbUser(decodedToken: any) {
   const firebaseUid = decodedToken.sub
@@ -98,6 +101,74 @@ export async function POST(req: NextRequest) {
     if (!dbUser) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
+
+    const events = await prisma.event.findMany({
+      where: {
+        id: { in: eventIds },
+        userId: dbUser.id,
+      },
+      select: {
+        id: true,
+        title: true,
+        startDate: true,
+        status: true,
+        user: {
+          select: {
+            notificationSettings: true,
+          },
+        },
+        invitations: {
+          select: {
+            guestEmail: true,
+            guestName: true,
+          },
+          where: {
+            status: {
+              not: "declined",
+            },
+          },
+        },
+      },
+    })
+
+    await Promise.allSettled(
+      events
+        .filter((event) => event.status === "published")
+        .flatMap((event) => {
+          const ownerSettings = event.user.notificationSettings
+            ? { ...defaultNotificationSettings, ...event.user.notificationSettings }
+            : defaultNotificationSettings
+          if (!ownerSettings.emailEventCancelled) {
+            return []
+          }
+
+          const dateLabel = event.startDate.toLocaleDateString(undefined, {
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })
+          const timeLabel = event.startDate.toLocaleTimeString(undefined, {
+            hour: "numeric",
+            minute: "2-digit",
+          })
+          const emailContent = buildEventCancelledEmail({
+            eventTitle: event.title,
+            eventDateLabel: dateLabel,
+            eventTimeLabel: timeLabel,
+            eventUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/i/${encodeURIComponent(event.id)}`,
+          })
+
+          return event.invitations.map((invitation) =>
+            sendEmail({
+              to: invitation.guestEmail,
+              subject: emailContent.subject,
+              text: emailContent.text,
+              html: emailContent.html,
+              fromName: event.title,
+            })
+          )
+        })
+    )
 
     const deleted = await prisma.event.deleteMany({
       where: {

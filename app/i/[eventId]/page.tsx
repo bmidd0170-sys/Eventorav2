@@ -99,5 +99,5 @@ export default async function SharedInvitationPage({
   const pages = normalizePages(event.pagesData)
   const safePages = pages.length > 0 ? pages : fallbackPages(event.title, event.startDate)
 
-  return <PublicInvitationView title={event.title} pages={safePages} />
+  return <PublicInvitationView eventId={event.id} title={event.title} pages={safePages} />
 }

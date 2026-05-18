@@ -33,8 +33,8 @@ const steps = [
     title: "4. Build and publish",
     description:
       "Move through Builder, Editor, Guest List, Preview, and Publish to create, refine, and share your event.",
-    href: "/builder",
-    linkLabel: "Start building",
+    href: "/editor?prompt=birthday%20theme&demo=1",
+    linkLabel: "Open editor demo",
   },
 ]
 
@@ -61,6 +61,10 @@ export function TutorialSection() {
           <p className="text-muted-foreground leading-relaxed">
             If you are visiting for the first time, follow these steps to learn where everything is,
             create your account, and find your way around the app without guessing.
+          </p>
+
+          <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+            Key workflow: <strong className="text-foreground font-medium">Builder → Editor → Guest List → Preview → Publish</strong> — follow this sequence to create, refine, and share your event. The steps below map to this flow so you can see where each action belongs.
           </p>
         </div>
 
@@ -93,6 +97,12 @@ export function TutorialSection() {
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
               These are the most useful places for new users after the first walkthrough.
             </p>
+
+            <div className="mt-4 p-3 rounded-lg bg-background/20 border border-border/30 text-sm text-muted-foreground">
+              <span className="text-sm font-medium text-primary">Workflow:</span>
+              <span className="ml-2">Builder → Editor → Guest List → Preview → Publish</span>
+              <p className="mt-2 text-xs italic text-muted-foreground">This is for testing purposes.</p>
+            </div>
 
             <div className="mt-6 space-y-3">
               {quickLinks.map((link) => (

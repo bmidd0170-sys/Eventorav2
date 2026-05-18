@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { auth } from "@/lib/firebase"
 import { 
   Link2, 
@@ -22,7 +24,10 @@ import {
   Send,
   Plus,
   X,
-  Sparkles
+  Sparkles,
+  Search,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
 
 type InviteMethod = "link" | "email" | "connections"
@@ -31,20 +36,8 @@ type Contact = {
   id: string
   name: string
   email: string
-  avatar?: string
-  selected: boolean
+  photoUrl?: string | null
 }
-
-const mockContacts: Contact[] = [
-  { id: "1", name: "Sarah Johnson", email: "sarah@email.com", selected: false },
-  { id: "2", name: "Mike Chen", email: "mike.chen@email.com", selected: false },
-  { id: "3", name: "Emma Wilson", email: "emma.w@email.com", selected: false },
-  { id: "4", name: "James Rodriguez", email: "james.r@email.com", selected: false },
-  { id: "5", name: "Lisa Park", email: "lisa.park@email.com", selected: false },
-  { id: "6", name: "David Kim", email: "d.kim@email.com", selected: false },
-  { id: "7", name: "Anna Martinez", email: "anna.m@email.com", selected: false },
-  { id: "8", name: "Tom Brown", email: "tom.brown@email.com", selected: false },
-]
 
 export default function PublishPage() {
   const searchParams = useSearchParams()
@@ -65,7 +58,12 @@ export default function PublishPage() {
   const [inviteLink, setInviteLink] = useState(invitePath)
   const [emailAddresses, setEmailAddresses] = useState<string[]>([])
   const [newEmail, setNewEmail] = useState("")
-  const [contacts, setContacts] = useState<Contact[]>(mockContacts)
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState("")
+  const [selectedContacts, setSelectedContacts] = useState<Contact[]>([])
   const [linkVisibility, setLinkVisibility] = useState<"public" | "private">("public")
   const [emailSubject, setEmailSubject] = useState("You're Invited!")
   const [emailMessage, setEmailMessage] = useState("I'd love for you to join me at this special event. Click the link below to view the invitation and RSVP.")
@@ -115,6 +113,83 @@ export default function PublishPage() {
     setInviteLink(`${window.location.origin}${invitePath}`)
   }, [invitePath])
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user)
+    })
+
+    return unsubscribe
+  }, [])
+
+  useEffect(() => {
+    const query = searchQuery.trim()
+
+    if (!query) {
+      setContacts([])
+      setSearchError("")
+      setSearchLoading(false)
+      return
+    }
+
+    if (!currentUser) {
+      setContacts([])
+      setSearchError("Sign in to search Eventora users.")
+      setSearchLoading(false)
+      return
+    }
+
+    let isActive = true
+
+    const timeoutId = window.setTimeout(async () => {
+      setSearchLoading(true)
+      setSearchError("")
+
+      try {
+        const token = await currentUser.getIdToken()
+        const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!response.ok) {
+          throw new Error(`Search failed with ${response.status}`)
+        }
+
+        const data = await response.json()
+        const users = Array.isArray(data.users) ? data.users : []
+
+        if (!isActive) {
+          return
+        }
+
+        setContacts(users.map((user: { id: string; displayName: string | null; email: string; photoUrl: string | null }) => ({
+          id: user.id,
+          name: user.displayName || user.email,
+          email: user.email,
+          photoUrl: user.photoUrl,
+        })))
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        console.error("Failed to search users:", error)
+        setContacts([])
+        setSearchError("Could not search users right now.")
+      } finally {
+        if (isActive) {
+          setSearchLoading(false)
+        }
+      }
+    }, 300)
+
+    return () => {
+      isActive = false
+      window.clearTimeout(timeoutId)
+    }
+  }, [currentUser, searchQuery])
+
   const handleCopyLink = () => {
     if (!inviteLink) {
       return
@@ -140,18 +215,24 @@ export default function PublishPage() {
     setEmailAddresses(emailAddresses.filter(e => e !== email))
   }
 
-  const toggleContact = (id: string) => {
-    setContacts(contacts.map(c => 
-      c.id === id ? { ...c, selected: !c.selected } : c
-    ))
+  const toggleContact = (contact: Contact) => {
+    setSelectedContacts((previous) => {
+      const alreadySelected = previous.some((selected) => selected.id === contact.id)
+
+      if (alreadySelected) {
+        return previous.filter((selected) => selected.id !== contact.id)
+      }
+
+      return [...previous, contact]
+    })
   }
 
   const handleSendEmails = async () => {
-    if (!emailAddresses.length || !inviteLink || !resolvedEventId) return
-    
-    const emailsToSend = activeMethod === "connections" 
-      ? contacts.filter(c => c.selected).map(c => c.email)
+    const emailsToSend = activeMethod === "connections"
+      ? selectedContacts.map((contact) => contact.email)
       : emailAddresses
+
+    if (!emailsToSend.length || !inviteLink || !resolvedEventId) return
 
     try {
       const user = auth.currentUser
@@ -190,14 +271,14 @@ export default function PublishPage() {
         setEmailAddresses([])
         setNewEmail("")
       } else if (activeMethod === "connections") {
-        setContacts(contacts.map(c => ({ ...c, selected: false })))
+        setSelectedContacts([])
       }
     } catch (error) {
       console.error('Failed to send invitations:', error)
     }
   }
 
-  const selectedContacts = contacts.filter(c => c.selected)
+  const selectedContactIds = new Set(selectedContacts.map((contact) => contact.id))
 
   const methods = [
     { 
@@ -492,42 +573,102 @@ export default function PublishPage() {
             <div className="space-y-6">
               {/* Search */}
               <div>
-                <label className="text-sm font-medium mb-3 block">Select from your contacts</label>
-                <Input
-                  placeholder="Search contacts..."
-                  className="mb-4"
-                />
+                <label className="text-sm font-medium mb-3 block">Search Eventora users</label>
+                <div className="relative mb-4">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or email"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+
+                {searchError && (
+                  <div className="mb-4 flex items-center gap-2 rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{searchError}</span>
+                  </div>
+                )}
 
                 {/* Contacts list */}
                 <div className="space-y-2 max-h-80 overflow-y-auto">
-                  {contacts.map((contact) => (
-                    <button
-                      key={contact.id}
-                      onClick={() => toggleContact(contact.id)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                        contact.selected
-                          ? "border-primary bg-primary/10"
-                          : "border-border/50 hover:border-border hover:bg-card/50"
-                      }`}
-                    >
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/30 to-accent/30 flex items-center justify-center text-sm font-medium">
-                        {contact.name.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{contact.name}</div>
-                        <div className="text-xs text-muted-foreground truncate">{contact.email}</div>
-                      </div>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        contact.selected
-                          ? "border-primary bg-primary"
-                          : "border-border"
-                      }`}>
-                        {contact.selected && <Check className="w-3 h-3 text-white" />}
-                      </div>
-                    </button>
-                  ))}
+                  {searchLoading && (
+                    <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-secondary/40 px-4 py-4 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Searching Neon users...
+                    </div>
+                  )}
+
+                  {!searchLoading && searchQuery.trim() && contacts.length === 0 && !searchError && (
+                    <div className="rounded-xl border border-border/50 bg-secondary/40 px-4 py-6 text-sm text-muted-foreground">
+                      No users found. Try a full name or email address.
+                    </div>
+                  )}
+
+                  {contacts.map((contact) => {
+                    const isSelected = selectedContactIds.has(contact.id)
+
+                    return (
+                      <button
+                        key={contact.id}
+                        onClick={() => toggleContact(contact)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                          isSelected
+                            ? "border-primary bg-primary/10"
+                            : "border-border/50 hover:border-border hover:bg-card/50"
+                        }`}
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={contact.photoUrl || undefined} alt={contact.name} />
+                          <AvatarFallback className="bg-gradient-to-br from-primary/30 to-accent/30 text-sm font-medium">
+                            {contact.name.split(" ").map((namePart) => namePart[0]).join("").slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">{contact.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">{contact.email}</div>
+                        </div>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary"
+                            : "border-border"
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
+
+              {selectedContacts.length > 0 && (
+                <div className="rounded-2xl border border-border/50 bg-secondary/30 p-4 space-y-3">
+                  <div className="text-sm font-medium">Selected users</div>
+                  <div className="space-y-2">
+                    {selectedContacts.map((contact) => (
+                      <div key={contact.id} className="flex items-center gap-3 rounded-xl border border-border/40 bg-background/60 px-3 py-2">
+                        <Avatar className="w-8 h-8">
+                          <AvatarImage src={contact.photoUrl || undefined} alt={contact.name} />
+                          <AvatarFallback className="bg-secondary text-xs font-medium">
+                            {contact.name.split(" ").map((namePart) => namePart[0]).join("").slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium truncate">{contact.name}</div>
+                          <div className="text-xs text-muted-foreground truncate">{contact.email}</div>
+                        </div>
+                        <button
+                          onClick={() => toggleContact(contact)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Selected count and send */}
               <div className="flex items-center justify-between pt-4 border-t border-border/50">

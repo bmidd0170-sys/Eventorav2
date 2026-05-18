@@ -1,5 +1,12 @@
 import { fetchWithAuth } from "@/lib/api-client"
 
+export interface UserSearchResult {
+    id: string;
+    email: string;
+    displayName: string | null;
+    photoUrl: string | null;
+}
+
 export interface Connection {
     id: string;
     userId: string;
@@ -17,6 +24,8 @@ export interface ConnectionRequest {
     toUserId: string;
     fromUserName: string;
     fromUserEmail: string;
+    toUserName?: string | null;
+    toUserEmail?: string | null;
     status: 'pending' | 'accepted' | 'rejected';
     createdAt: string | Date;
     updatedAt: string | Date;
@@ -43,18 +52,41 @@ export async function getConnections(userId: string): Promise<Connection[]> {
 /**
  * Get pending connection requests for a user
  */
-export async function getPendingRequests(userId: string): Promise<ConnectionRequest[]> {
+export async function getPendingRequests(userId: string): Promise<{ incoming: ConnectionRequest[]; outgoing: ConnectionRequest[] }> {
     try {
         const response = await fetchWithAuth('/api/connections?view=requests');
         if (!response.ok) {
             throw new Error('Failed to load pending requests');
         }
 
-        const data = (await response.json()) as { requests: ConnectionRequest[] };
-        return data.requests;
+        const data = (await response.json()) as { incoming?: ConnectionRequest[]; outgoing?: ConnectionRequest[] };
+        return { incoming: data.incoming || [], outgoing: data.outgoing || [] };
     } catch (error) {
         console.error('Error fetching pending requests:', error);
         throw error;
+    }
+}
+
+/**
+ * Search Eventora users by name or email
+ */
+export async function searchUsers(query: string): Promise<UserSearchResult[]> {
+    const trimmedQuery = query.trim()
+    if (!trimmedQuery) {
+        return []
+    }
+
+    try {
+        const response = await fetchWithAuth(`/api/users/search?q=${encodeURIComponent(trimmedQuery)}`)
+        if (!response.ok) {
+            throw new Error('Failed to search users')
+        }
+
+        const data = (await response.json()) as { users?: UserSearchResult[] }
+        return Array.isArray(data.users) ? data.users : []
+    } catch (error) {
+        console.error('Error searching users:', error)
+        throw error
     }
 }
 
@@ -206,6 +238,25 @@ export async function unblockUser(userId: string, blockedUserId: string): Promis
         }
     } catch (error) {
         console.error('Error unblocking user:', error);
+        throw error;
+    }
+}
+
+/**
+ * Cancel an outgoing connection request
+ */
+export async function cancelConnectionRequest(requestId: string): Promise<void> {
+    try {
+        const response = await fetchWithAuth('/api/connections', {
+            method: 'POST',
+            body: JSON.stringify({ action: 'cancel', requestId }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to cancel connection request');
+        }
+    } catch (error) {
+        console.error('Error cancelling connection request:', error);
         throw error;
     }
 }

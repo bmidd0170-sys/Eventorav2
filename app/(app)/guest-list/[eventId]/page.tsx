@@ -8,6 +8,49 @@ import type { InvitationSummary } from "@/lib/invitations"
 import type { Guest } from "@/lib/guest-lists"
 import { Spinner } from "@/components/ui/spinner"
 
+const TUTORIAL_PREVIEW_EVENT_ID = "tutorial-preview"
+
+const tutorialPreviewGuests: Guest[] = [
+    {
+        id: "tutorial-guest-1",
+        name: "Alex Morgan",
+        email: "alex@example.com",
+        status: "confirmed",
+        plusOne: true,
+        respondedAt: "May 18, 2026",
+    },
+    {
+        id: "tutorial-guest-2",
+        name: "Jordan Lee",
+        email: "jordan@example.com",
+        status: "pending",
+        plusOne: false,
+    },
+    {
+        id: "tutorial-guest-3",
+        name: "Taylor Smith",
+        email: "taylor@example.com",
+        status: "declined",
+        plusOne: false,
+        respondedAt: "May 17, 2026",
+    },
+]
+
+function buildTutorialPreviewInvitation(title: string): InvitationSummary {
+    return {
+        id: TUTORIAL_PREVIEW_EVENT_ID,
+        title,
+        description: "Tutorial guest list preview",
+        date: "May 20",
+        time: "7:00 PM",
+        status: "active",
+        guests: {
+            confirmed: 1,
+            total: tutorialPreviewGuests.length,
+        },
+    }
+}
+
 export default function GuestListRoutePage() {
     const params = useParams()
     const eventId = params.eventId as string
@@ -19,6 +62,14 @@ export default function GuestListRoutePage() {
     useEffect(() => {
         const loadData = async () => {
             try {
+                if (eventId === TUTORIAL_PREVIEW_EVENT_ID) {
+                    const stored = localStorage.getItem("eventora-preview-data")
+                    const preview = stored ? JSON.parse(stored) : null
+                    setInvitation(buildTutorialPreviewInvitation(preview?.title || "Tutorial Preview"))
+                    setGuests(tutorialPreviewGuests)
+                    return
+                }
+
                 const user = auth.currentUser
                 if (!user) {
                     setError("Not authenticated")
@@ -45,6 +96,14 @@ export default function GuestListRoutePage() {
                 const event = eventData.events?.find((e: any) => e.id === eventId)
 
                 if (!event) {
+                    const stored = localStorage.getItem("eventora-preview-data")
+                    if (stored) {
+                        const preview = JSON.parse(stored)
+                        setInvitation(buildTutorialPreviewInvitation(preview?.title || "Tutorial Preview"))
+                        setGuests(tutorialPreviewGuests)
+                        return
+                    }
+
                     setError("Event not found")
                     return
                 }

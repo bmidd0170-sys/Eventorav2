@@ -87,6 +87,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: "Unable to resolve user" },
+        { status: 404 }
+      )
+    }
+
     // Create or update the event with upsert using database user ID
     // Store pages and messages together in pagesData as an object
     // Transform pages to include 'type' field extracted from id

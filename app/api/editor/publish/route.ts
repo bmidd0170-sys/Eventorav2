@@ -83,6 +83,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (!dbUser) {
+      return NextResponse.json(
+        { error: "Unable to resolve user" },
+        { status: 404 }
+      )
+    }
+
     // Find the event and verify ownership
     const event = await prisma.event.findUnique({
       where: { id: body.eventId },

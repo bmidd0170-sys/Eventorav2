@@ -660,6 +660,7 @@ export default function EditorPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialPrompt = searchParams.get("prompt") || ""
+  const isDemoMode = searchParams.get("demo") === "1"
   const starterTemplate = getStarterTemplateFromPrompt(initialPrompt)
   const eventParam = searchParams.get("event")
   const projectParam = searchParams.get("project")
@@ -716,8 +717,12 @@ export default function EditorPage() {
         id: "welcome",
         role: "assistant",
         content: starterTemplate
-          ? `I'm ${assistantName}. I already set up a tailored multi-page starter for "${starterTemplate.title}" with prefilled sections. Tell me what you'd like to refine first.`
-          : `I'm ${assistantName}. I'll help you shape "${initialPrompt}" into something more intentional. I started with a multi-page invitation, and we can make the cover, details, and RSVP feel more alive from here.`,
+          ? isDemoMode
+            ? `Demo mode is on. I'm ${assistantName}, and I’ve preloaded a mock response flow for "${starterTemplate.title}" so you can see how the editor reacts without calling the AI.`
+            : `I'm ${assistantName}. I already set up a tailored multi-page starter for "${starterTemplate.title}" with prefilled sections. Tell me what you'd like to refine first.`
+          : isDemoMode
+            ? `Demo mode is on. I'm ${assistantName}, and I’ll show you mock AI reactions for "${initialPrompt}" without sending anything to the AI service.`
+            : `I'm ${assistantName}. I'll help you shape "${initialPrompt}" into something more intentional. I started with a multi-page invitation, and we can make the cover, details, and RSVP feel more alive from here.`,
         timestamp: new Date()
       }
       setMessages([welcomeMessage])
@@ -725,12 +730,14 @@ export default function EditorPage() {
       const welcomeMessage: Message = {
         id: "welcome",
         role: "assistant",
-        content: `I'm ${assistantName}, your creative design partner. Let's make this feel more alive - you can describe changes, ask for a new page, or push the visual rhythm in a bolder direction.`,
+        content: isDemoMode
+          ? `Demo mode is on. I'm ${assistantName}, and I’ll respond with canned AI reactions so you can explore the editor safely.`
+          : `I'm ${assistantName}, your creative design partner. Let's make this feel more alive - you can describe changes, ask for a new page, or push the visual rhythm in a bolder direction.`,
         timestamp: new Date()
       }
       setMessages([welcomeMessage])
     }
-  }, [assistantName, initialPrompt, starterTemplate])
+  }, [assistantName, initialPrompt, starterTemplate, isDemoMode])
 
   // Set up auth token and load draft
   useEffect(() => {
@@ -740,6 +747,12 @@ export default function EditorPage() {
           const token = await user.getIdToken()
           setAuthToken(token)
           setUserId(user.uid)
+
+          if (isDemoMode) {
+            // Demo mode stays client-local: no draft load/save/publish calls.
+            setIsLoadingDraft(false)
+            return
+          }
           
           // Try to load draft from database
           const response = await fetch("/api/editor/load", {
@@ -806,7 +819,7 @@ export default function EditorPage() {
     })
 
     return () => unsubscribe()
-  }, [currentEventId])
+  }, [currentEventId, isDemoMode])
 
   // Load brand settings when user ID is available
   useEffect(() => {
@@ -903,29 +916,42 @@ export default function EditorPage() {
       setIsTyping(true)
 
       try {
-        const response = await fetch("/api/editor/ai", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            prompt: initialPrompt,
-            invitation: {
-              id: currentEventId,
-              title: currentInvitation.title,
-              description: currentInvitation.description,
-            },
-            activePage,
-            pages: pages.map(({ id, name, content }) => ({ id, name, content })),
-            recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
-          }),
-        })
+        const data = isDemoMode
+          ? getDemoAiResponse(initialPrompt, activePage)
+          : await (async () => {
+              const response = await fetch("/api/editor/ai", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  prompt: initialPrompt,
+                  invitation: {
+                    id: currentEventId,
+                    title: currentInvitation.title,
+                    description: currentInvitation.description,
+                  },
+                  activePage,
+                  pages: pages.map(({ id, name, content }) => ({ id, name, content })),
+                  recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
+                }),
+              })
 
-        if (!response.ok) {
-          throw new Error("AI request failed")
+              if (response.status === 204) {
+                return null
+              }
+
+              if (!response.ok) {
+                throw new Error("AI request failed")
+              }
+
+              return (await response.json()) as AiEditorResponse
+            })()
+
+        if (!data) {
+          return
         }
 
-        const data = (await response.json()) as AiEditorResponse
         const reply = data.reply?.trim() || "I took a pass at that and shaped the invitation with a clearer visual rhythm."
         const assistantMessage: Message = {
           id: Date.now().toString(),
@@ -1007,6 +1033,8 @@ export default function EditorPage() {
   }
 
   useEffect(() => {
+    if (isDemoMode) return
+
     const timer = setTimeout(async () => {
       if (!authToken || !userId) return
       
@@ -1034,7 +1062,7 @@ export default function EditorPage() {
       }
     }, 1000)
     return () => clearTimeout(timer)
-  }, [eventTitle, messages, pages, currentEventId, authToken, userId])
+  }, [eventTitle, messages, pages, currentEventId, authToken, userId, isDemoMode])
 
   const handleSendMessage = async () => {
     const prompt = inputValue.trim()
@@ -1056,29 +1084,42 @@ export default function EditorPage() {
     setIsTyping(true)
 
     try {
-      const response = await fetch("/api/editor/ai", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          prompt,
-          invitation: {
-            id: currentEventId,
-            title: currentInvitation.title,
-            description: currentInvitation.description,
-          },
-          activePage,
-          pages: pages.map(({ id, name, content }) => ({ id, name, content })),
-          recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
-        }),
-      })
+      const data = isDemoMode
+        ? getDemoAiResponse(prompt, activePage)
+        : await (async () => {
+            const response = await fetch("/api/editor/ai", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                prompt,
+                invitation: {
+                  id: currentEventId,
+                  title: currentInvitation.title,
+                  description: currentInvitation.description,
+                },
+                activePage,
+                pages: pages.map(({ id, name, content }) => ({ id, name, content })),
+                recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
+              }),
+            })
 
-      if (!response.ok) {
-        throw new Error("AI request failed")
+            if (response.status === 204) {
+              return null
+            }
+
+            if (!response.ok) {
+              throw new Error("AI request failed")
+            }
+
+            return (await response.json()) as AiEditorResponse
+          })()
+
+      if (!data) {
+        return
       }
 
-      const data = (await response.json()) as AiEditorResponse
       const reply = data.reply?.trim() || "I took a pass at that and shaped the invitation with a clearer visual rhythm."
       const assistantMessage: Message = {
         id: Date.now().toString(),
@@ -1276,7 +1317,9 @@ export default function EditorPage() {
           <Button
             size="sm"
             className="gradient-primary border-0 text-white"
+            disabled={isDemoMode || !authToken || !userId}
             onClick={async () => {
+              if (isDemoMode) return
               if (!authToken || !userId) return
               try {
                 const response = await fetch("/api/editor/publish", {
@@ -1607,7 +1650,7 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
           )}
 
           {/* Form fields */}
-          {content.fields && (
+          {Array.isArray(content.fields) && (
             <div className="space-y-3 text-left">
               {content.fields.map((field, index) => (
                 <div key={index}>
@@ -1632,7 +1675,7 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
           )}
 
           {/* Buttons */}
-          {content.buttons && (
+          {Array.isArray(content.buttons) && (
             <div className="flex justify-center gap-3 pt-4">
               {content.buttons.map((button, index) => (
                 <Button
@@ -1863,6 +1906,79 @@ function generateFallbackAIResponse(input: string): Message {
   }
 }
 
+function getDemoAiResponse(input: string, activePageId: string): AiEditorResponse {
+  const lowerInput = input.toLowerCase()
+
+  if (lowerInput.includes("page") || lowerInput.includes("add") || lowerInput.includes("new")) {
+    return {
+      reply: "Mock build step 1: I would add a supporting page, move the flow there, and keep the copy focused so the invite unfolds more naturally.",
+      actions: [
+        {
+          type: "add_page",
+          pageType: "details",
+          name: "Details",
+          content: {
+            headline: "Event Details",
+            body: "The practical details stay clear, while the page still feels designed instead of purely functional.",
+          },
+        },
+        {
+          type: "focus_page",
+          pageId: activePageId,
+        },
+      ],
+    }
+  }
+
+  if (
+    lowerInput.includes("color") ||
+    lowerInput.includes("theme") ||
+    lowerInput.includes("brand") ||
+    lowerInput.includes("style") ||
+    lowerInput.includes("context")
+  ) {
+    return {
+      reply: "Mock build step 2: I would shift the context, tighten the hierarchy, and tune the page tone so the editor shows a stronger visual direction.",
+      actions: [
+        {
+          type: "patch_page",
+          pageId: activePageId,
+          content: {
+            headline: "A More Intentional Invitation",
+            subheadline: "Warmer contrast, calmer spacing, and a clearer reading path",
+            body: "This version keeps the page focused on the invite experience instead of the generic template feel.",
+          },
+        },
+      ],
+    }
+  }
+
+  const demoElementId = `demo-element-${Date.now()}`
+
+  return {
+    reply: "Mock build step 3: I would work directly in the editor canvas, add a supporting element, and refine the structure where the user can see the change immediately.",
+    actions: [
+      {
+        type: "add_element",
+        pageId: activePageId,
+        element: {
+          id: demoElementId,
+          type: "text",
+          order: 0,
+          content: {
+            text: "The layout now feels calmer, with a clearer rhythm and more breathing room.",
+          },
+        },
+      },
+      {
+        type: "focus_element",
+        pageId: activePageId,
+        elementId: demoElementId,
+      },
+    ],
+  }
+}
+
 function applyAiActions(actions: AiAction[], currentPages: InvitePage[]) {
   let nextPages = [...currentPages]
   let activePageId: string | undefined
@@ -1873,9 +1989,18 @@ function applyAiActions(actions: AiAction[], currentPages: InvitePage[]) {
       const pageIndex = nextPages.findIndex(page => page.id === action.pageId)
       if (pageIndex === -1) continue
 
+      const patchedContent = {
+        ...action.content,
+        buttons: Array.isArray(action.content.buttons) ? action.content.buttons : undefined,
+        fields: Array.isArray(action.content.fields) ? action.content.fields : undefined,
+        items: Array.isArray(action.content.items) ? action.content.items : undefined,
+        elements: Array.isArray(action.content.elements) ? action.content.elements : undefined,
+        images: Array.isArray(action.content.images) ? action.content.images : undefined,
+      }
+
       nextPages = nextPages.map(page => (
         page.id === action.pageId
-          ? { ...page, content: { ...page.content, ...action.content } }
+          ? { ...page, content: { ...page.content, ...patchedContent } }
           : page
       ))
       activePageId = action.pageId

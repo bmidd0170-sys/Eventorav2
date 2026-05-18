@@ -3,7 +3,8 @@ import { browserLocalPersistence, indexedDBLocalPersistence, initializeAuth, get
 import { getFirestore } from 'firebase/firestore';
 
 function cleanEnv(value: string | undefined) {
-  return value?.trim();
+  // Trim whitespace and strip any surrounding single or double quotes
+  return value?.trim().replace(/^['"]|['"]$/g, "");
 }
 
 // Initialize Firebase with your config
@@ -17,6 +18,17 @@ const firebaseConfig = {
 };
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+// Expose config in the browser for debugging and log it once
+if (typeof window !== 'undefined') {
+  try {
+    ;(window as any).__FIREBASE_CONFIG = firebaseConfig
+    // eslint-disable-next-line no-console
+    console.info('Resolved Firebase config:', firebaseConfig)
+  } catch (e) {
+    // ignore
+  }
+}
 
 export const auth = getApps().length
   ? getAuth(app)

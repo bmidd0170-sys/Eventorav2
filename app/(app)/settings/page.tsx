@@ -18,6 +18,8 @@ import {
   blockUser,
   acceptConnectionRequest,
   rejectConnectionRequest,
+  searchUsers,
+  cancelConnectionRequest,
   sendConnectionRequest,
   type Connection,
   type ConnectionRequest,
@@ -458,6 +460,18 @@ function NotificationSettings() {
           ) : (
             <>
               <ToggleSetting
+                label="Welcome Email"
+                description="Send a welcome message when someone creates an account"
+                checked={settings.emailWelcome}
+                onChange={(checked) => setSettings({ ...settings, emailWelcome: checked })}
+              />
+              <ToggleSetting
+                label="Tutorial Complete"
+                description="Send a message when a user finishes the tutorial"
+                checked={settings.emailTutorialComplete}
+                onChange={(checked) => setSettings({ ...settings, emailTutorialComplete: checked })}
+              />
+              <ToggleSetting
                 label="Security Alerts"
                 description="Receive emails for sign-ins and security events"
                 checked={settings.emailSecurity}
@@ -476,22 +490,40 @@ function NotificationSettings() {
                 onChange={(checked) => setSettings({ ...settings, emailReminders: checked })}
               />
               <ToggleSetting
-                label="Product Updates"
-                description="Learn about new features and improvements"
-                checked={settings.emailMarketing}
-                onChange={(checked) => setSettings({ ...settings, emailMarketing: checked })}
+                label="Connection Requests Sent"
+                description="Receive a message after you send a request"
+                checked={settings.emailConnectionsOutgoing}
+                onChange={(checked) => setSettings({ ...settings, emailConnectionsOutgoing: checked })}
               />
               <ToggleSetting
-                label="Connection Requests"
+                label="Connection Requests Received"
                 description="Receive emails when someone sends you a connection request"
-                checked={settings.emailConnectionsRequests}
-                onChange={(checked) => setSettings({ ...settings, emailConnectionsRequests: checked })}
+                checked={settings.emailConnectionsIncoming}
+                onChange={(checked) => setSettings({ ...settings, emailConnectionsIncoming: checked })}
               />
               <ToggleSetting
                 label="Connection Accepted"
                 description="Receive an email when a connection request is accepted"
                 checked={settings.emailConnectionsAccepted}
                 onChange={(checked) => setSettings({ ...settings, emailConnectionsAccepted: checked })}
+              />
+              <ToggleSetting
+                label="Event Canceled"
+                description="Notify guests when an event is canceled"
+                checked={settings.emailEventCancelled}
+                onChange={(checked) => setSettings({ ...settings, emailEventCancelled: checked })}
+              />
+              <ToggleSetting
+                label="App Updates"
+                description="Get product update emails when the app changes"
+                checked={settings.emailAppUpdates}
+                onChange={(checked) => setSettings({ ...settings, emailAppUpdates: checked })}
+              />
+              <ToggleSetting
+                label="Product Updates"
+                description="Learn about new features and improvements"
+                checked={settings.emailMarketing}
+                onChange={(checked) => setSettings({ ...settings, emailMarketing: checked })}
               />
             </>
           )}
@@ -571,14 +603,12 @@ function NotificationSettings() {
 
 function ConnectionsSettings() {
   const [connections, setConnections] = useState<Connection[]>([])
-  const [pendingRequests, setPendingRequests] = useState<ConnectionRequest[]>([])
+  const [pendingIncoming, setPendingIncoming] = useState<ConnectionRequest[]>([])
+  const [pendingOutgoing, setPendingOutgoing] = useState<ConnectionRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string>("You")
-  const [email, setEmail] = useState("")
-  const [sendingRequest, setSendingRequest] = useState(false)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -610,7 +640,8 @@ function ConnectionsSettings() {
   const loadPendingRequests = async (userId: string) => {
     try {
       const data = await getPendingRequests(userId)
-      setPendingRequests(data)
+      setPendingIncoming(data.incoming || [])
+      setPendingOutgoing(data.outgoing || [])
     } catch (err) {
       console.error("Error loading pending requests:", err)
     }
@@ -652,7 +683,7 @@ function ConnectionsSettings() {
         request.fromUserEmail,
         auth.currentUser?.email || ""
       )
-      setPendingRequests(pendingRequests.filter((r) => r.id !== request.id))
+      setPendingIncoming((prev) => prev.filter((r: ConnectionRequest) => r.id !== request.id))
       if (currentUserId) {
         loadConnections(currentUserId)
       }
@@ -665,50 +696,20 @@ function ConnectionsSettings() {
   const handleRejectRequest = async (requestId: string) => {
     try {
       await rejectConnectionRequest(requestId)
-      setPendingRequests(pendingRequests.filter((r) => r.id !== requestId))
+      setPendingIncoming((prev) => prev.filter((r: ConnectionRequest) => r.id !== requestId))
     } catch (err) {
       console.error("Error rejecting request:", err)
       setError("Failed to reject connection request")
     }
   }
 
-  const handleSendConnectionRequest = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!email.trim()) {
-      setError("Please enter an email address")
-      return
-    }
-
-    if (!currentUserId) {
-      setError("You must be logged in to send a connection request")
-      return
-    }
-
+  const handleCancelOutgoing = async (requestId: string) => {
     try {
-      setSendingRequest(true)
-      setError(null)
-      setSuccessMessage(null)
-
-      const userEmail = auth.currentUser?.email || ""
-      await sendConnectionRequest(
-        currentUserId,
-        email,
-        currentUserName,
-        userEmail,
-        email
-      )
-
-      setSuccessMessage(`Connection request sent to ${email}`)
-      setEmail("")
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(null), 3000)
+      await cancelConnectionRequest(requestId)
+      setPendingOutgoing((prev) => prev.filter((r: ConnectionRequest) => r.id !== requestId))
     } catch (err) {
-      console.error("Error sending connection request:", err)
-      setError("Failed to send connection request. Please try again.")
-    } finally {
-      setSendingRequest(false)
+      console.error('Error cancelling outgoing request:', err)
+      setError('Failed to cancel outgoing request')
     }
   }
 
@@ -720,53 +721,82 @@ function ConnectionsSettings() {
         </div>
       )}
 
-      {successMessage && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-green-700 dark:text-green-400 text-sm">
-          ✓ {successMessage}
-        </div>
-      )}
-
       {/* Pending Requests */}
       <section className="bg-card rounded-xl border border-border/50 p-6">
-        <h2 className="text-lg font-medium mb-4">Connection Requests ({pendingRequests.length})</h2>
-        {pendingRequests.length > 0 ? (
-          <div className="space-y-3">
-            {pendingRequests.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg border border-border/30"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{request.fromUserName}</p>
-                  <p className="text-sm text-muted-foreground truncate">{request.fromUserEmail}</p>
+        <h2 className="text-lg font-medium mb-4">Connection Requests</h2>
+
+        {/* Incoming Requests */}
+        <div className="mb-4">
+          <h3 className="font-medium">Incoming ({pendingIncoming.length})</h3>
+          {pendingIncoming.length > 0 ? (
+            <div className="space-y-3 mt-3">
+              {pendingIncoming.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg border border-border/30"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{request.fromUserName}</p>
+                    <p className="text-sm text-muted-foreground truncate">{request.fromUserEmail}</p>
+                  </div>
+                  <div className="flex gap-2 ml-4">
+                    <Button
+                      size="sm"
+                      className="gradient-primary border-0 text-white"
+                      onClick={() => handleAcceptRequest(request)}
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border/50"
+                      onClick={() => handleRejectRequest(request.id)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2 ml-4">
-                  <Button
-                    size="sm"
-                    className="gradient-primary border-0 text-white"
-                    onClick={() => handleAcceptRequest(request)}
-                  >
-                    <Check className="w-4 h-4 mr-1" />
-                    Accept
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="border-border/50"
-                    onClick={() => handleRejectRequest(request.id)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-muted-foreground mt-2">No incoming requests</div>
+          )}
+        </div>
+
+        {/* Outgoing Requests */}
+        <div>
+          <h3 className="font-medium">Outgoing ({pendingOutgoing.length})</h3>
+          {pendingOutgoing.length > 0 ? (
+            <div className="space-y-3 mt-3">
+              {pendingOutgoing.map((request) => (
+                <div
+                  key={request.id}
+                  className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg border border-border/30"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{request.toUserName || request.toUserEmail || 'Recipient'}</p>
+                    <p className="text-sm text-muted-foreground truncate">{request.toUserEmail || ''}</p>
+                  </div>
+                  <div className="flex gap-2 ml-4 items-center">
+                    <div className="text-sm text-muted-foreground">Pending</div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-border/50"
+                      onClick={() => handleCancelOutgoing(request.id)}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <p className="font-medium">No pending connection requests</p>
-            <p className="text-sm mt-1">When someone sends you a request, it will appear here.</p>
-          </div>
-        )}
+              ))}
+            </div>
+          ) : (
+            <div className="text-muted-foreground mt-2">No outgoing requests</div>
+          )}
+        </div>
       </section>
 
       {/* Active Connections */}
@@ -835,34 +865,6 @@ function ConnectionsSettings() {
         )}
       </section>
 
-      {/* Add Connection */}
-      <section className="bg-card rounded-xl border border-border/50 p-6">
-        <h2 className="text-lg font-medium mb-4">Add Connection</h2>
-        <form onSubmit={handleSendConnectionRequest} className="space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-2 block">Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter email to connect with user"
-              disabled={sendingRequest}
-              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50"
-            />
-          </div>
-          <Button 
-            type="submit"
-            disabled={sendingRequest}
-            className="gradient-primary border-0 text-white disabled:opacity-50"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            {sendingRequest ? "Sending..." : "Send Connection Request"}
-          </Button>
-          <p className="text-xs text-muted-foreground">
-            The user will receive a connection request and can accept or decline.
-          </p>
-        </form>
-      </section>
     </div>
   )
 }

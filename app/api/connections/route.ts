@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAuthenticatedDbUser } from "@/lib/api-auth"
 import { defaultNotificationSettings, type NotificationSettings } from "@/lib/notification-settings"
+import {
+  buildConnectionRequestAcceptedEmail,
+  buildConnectionRequestIncomingEmail,
+  buildConnectionRequestOutgoingEmail,
+} from "@/lib/email-templates"
+import { sendEmail } from "@/lib/email"
 
 function serializeConnection(connection: {
   id: string
@@ -12,13 +18,21 @@ function serializeConnection(connection: {
   status: string
   createdAt: Date
   updatedAt: Date
+  connectedUser?: {
+    displayName: string | null
+    email: string
+    photoUrl: string | null
+  } | null
 }) {
+  const connectedUserName = connection.connectedUser?.displayName || connection.connectedUserName
+  const connectedUserEmail = connection.connectedUser?.email || connection.connectedUserEmail
+
   return {
     id: connection.id,
     userId: connection.userId,
     connectedUserId: connection.connectedUserId,
-    connectedUserName: connection.connectedUserName,
-    connectedUserEmail: connection.connectedUserEmail,
+    connectedUserName,
+    connectedUserEmail,
     status: connection.status,
     createdAt: connection.createdAt.toISOString(),
     updatedAt: connection.updatedAt.toISOString(),
@@ -34,6 +48,8 @@ function serializeRequest(request: {
   status: string
   createdAt: Date
   updatedAt: Date
+  toUserName?: string | null
+  toUserEmail?: string | null
 }) {
   return {
     id: request.id,
@@ -41,6 +57,8 @@ function serializeRequest(request: {
     toUserId: request.toUserId,
     fromUserName: request.fromUserName,
     fromUserEmail: request.fromUserEmail,
+    toUserName: request.toUserName || null,
+    toUserEmail: request.toUserEmail || null,
     status: request.status,
     createdAt: request.createdAt.toISOString(),
     updatedAt: request.updatedAt.toISOString(),
@@ -80,7 +98,7 @@ export async function GET(req: NextRequest) {
     const view = req.nextUrl.searchParams.get("view") || "connections"
 
     if (view === "requests") {
-      const requests = await prisma.connectionRequest.findMany({
+      const incoming = await prisma.connectionRequest.findMany({
         where: {
           toUserId: authUser.dbUser.id,
           status: "pending",
@@ -88,8 +106,27 @@ export async function GET(req: NextRequest) {
         orderBy: { updatedAt: "desc" },
       })
 
+      const outgoing = await prisma.connectionRequest.findMany({
+        where: {
+          fromUserId: authUser.dbUser.id,
+          status: "pending",
+        },
+        include: { toUser: true },
+        orderBy: { updatedAt: "desc" },
+      })
+
+      // Map outgoing requests to include recipient info
+      const outgoingSerialized = outgoing.map((r) =>
+        serializeRequest({
+          ...r,
+          toUserName: r.toUser?.displayName || null,
+          toUserEmail: r.toUser?.email || null,
+        })
+      )
+
       return NextResponse.json({
-        requests: requests.map(serializeRequest),
+        incoming: incoming.map(serializeRequest),
+        outgoing: outgoingSerialized,
       })
     }
 
@@ -97,6 +134,15 @@ export async function GET(req: NextRequest) {
       where: {
         userId: authUser.dbUser.id,
         status: "accepted",
+      },
+      include: {
+        connectedUser: {
+          select: {
+            displayName: true,
+            email: true,
+            photoUrl: true,
+          },
+        },
       },
       orderBy: { updatedAt: "desc" },
     })
@@ -159,13 +205,33 @@ export async function POST(req: NextRequest) {
       })
 
       try {
-        await sendEmailIfAllowed(req, recipient.id, "emailConnectionsRequests", {
-          to: recipient.email,
-          subject: `${request.fromUserName} sent you a connection request on Eventora`,
-          text: `${request.fromUserName} (${request.fromUserEmail}) wants to connect with you on Eventora.`,
-          html: `<p><strong>${request.fromUserName}</strong> (${request.fromUserEmail}) wants to connect with you on <strong>Eventora</strong>.</p>`,
-          fromName: "Eventora",
+        const outgoingEmail = buildConnectionRequestOutgoingEmail({
+          fromName: request.fromUserName,
+          fromEmail: request.fromUserEmail,
+          toName: recipient.displayName,
         })
+        const incomingEmail = buildConnectionRequestIncomingEmail({
+          fromName: request.fromUserName,
+          fromEmail: request.fromUserEmail,
+          toName: recipient.displayName,
+        })
+
+        await Promise.all([
+          sendEmailIfAllowed(req, authUser.dbUser.id, "emailConnectionsOutgoing", {
+            to: authUser.dbUser.email,
+            subject: outgoingEmail.subject,
+            text: outgoingEmail.text,
+            html: outgoingEmail.html,
+            fromName: "Eventora",
+          }),
+          sendEmailIfAllowed(req, recipient.id, "emailConnectionsIncoming", {
+            to: recipient.email,
+            subject: incomingEmail.subject,
+            text: incomingEmail.text,
+            html: incomingEmail.html,
+            fromName: "Eventora",
+          }),
+        ])
       } catch (emailError) {
         console.warn("Failed to send connection request email", emailError)
       }
@@ -245,19 +311,36 @@ export async function POST(req: NextRequest) {
       ])
 
       try {
+        const senderName = sender.displayName || sender.email
+        const recipientName = authUser.dbUser.displayName || authUser.dbUser.email
+        const senderAcceptedEmail = buildConnectionRequestAcceptedEmail({
+          senderName,
+          senderEmail: sender.email,
+          recipientName,
+          recipientEmail: authUser.dbUser.email,
+          viewer: "sender",
+        })
+        const recipientAcceptedEmail = buildConnectionRequestAcceptedEmail({
+          senderName,
+          senderEmail: sender.email,
+          recipientName,
+          recipientEmail: authUser.dbUser.email,
+          viewer: "recipient",
+        })
+
         await Promise.all([
           sendEmailIfAllowed(req, authUser.dbUser.id, "emailConnectionsAccepted", {
             to: authUser.dbUser.email,
-            subject: `You accepted ${sender.displayName || sender.email}'s connection request`,
-            text: `You accepted ${sender.displayName || sender.email}'s connection request on Eventora.`,
-            html: `<p>You accepted <strong>${sender.displayName || sender.email}</strong>'s connection request on <strong>Eventora</strong>.</p>`,
+            subject: recipientAcceptedEmail.subject,
+            text: recipientAcceptedEmail.text,
+            html: recipientAcceptedEmail.html,
             fromName: "Eventora",
           }),
           sendEmailIfAllowed(req, sender.id, "emailConnectionsAccepted", {
             to: sender.email,
-            subject: `${authUser.dbUser.displayName || authUser.dbUser.email} accepted your connection request`,
-            text: `${authUser.dbUser.displayName || authUser.dbUser.email} accepted your connection request on Eventora.`,
-            html: `<p><strong>${authUser.dbUser.displayName || authUser.dbUser.email}</strong> accepted your connection request on <strong>Eventora</strong>.</p>`,
+            subject: senderAcceptedEmail.subject,
+            text: senderAcceptedEmail.text,
+            html: senderAcceptedEmail.html,
             fromName: "Eventora",
           }),
         ])
@@ -283,6 +366,22 @@ export async function POST(req: NextRequest) {
         where: { id: requestId },
         data: { status: "rejected" },
       })
+
+      return NextResponse.json({ ok: true }, { status: 200 })
+    }
+
+    if (action === "cancel") {
+      const requestId = String(body.requestId || "")
+      if (!requestId) {
+        return NextResponse.json({ error: "Missing requestId" }, { status: 400 })
+      }
+
+      const request = await prisma.connectionRequest.findUnique({ where: { id: requestId } })
+      if (!request || request.fromUserId !== authUser.dbUser.id) {
+        return NextResponse.json({ error: "Request not found or not allowed" }, { status: 404 })
+      }
+
+      await prisma.connectionRequest.delete({ where: { id: requestId } })
 
       return NextResponse.json({ ok: true }, { status: 200 })
     }

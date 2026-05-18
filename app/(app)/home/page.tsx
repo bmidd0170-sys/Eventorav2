@@ -239,8 +239,8 @@ export default function HomePage() {
               onDrop={onDrop}
               onDragOver={onDragOver}
               className={`relative bg-card rounded-2xl border transition-all duration-200 ${isFocused
-                ? "border-primary/50 shadow-lg shadow-primary/5"
-                : "border-border/50"
+                  ? "border-primary/50 shadow-lg shadow-primary/5"
+                  : "border-border/50"
                 }`}
             >
               <textarea
@@ -331,8 +331,8 @@ export default function HomePage() {
                   size="icon"
                   disabled={!inputValue.trim()}
                   className={`h-8 w-8 rounded-lg transition-all ${inputValue.trim()
-                    ? "gradient-primary border-0 text-white"
-                    : "bg-secondary text-muted-foreground"
+                      ? "gradient-primary border-0 text-white"
+                      : "bg-secondary text-muted-foreground"
                     }`}
                 >
                   <ArrowUp className="w-4 h-4" />
@@ -388,10 +388,10 @@ export default function HomePage() {
                   <div className="bg-card rounded-xl border border-border/50 overflow-hidden hover:border-primary/30 transition-smooth">
                     {/* Thumbnail */}
                     <div className={`h-24 ${project.thumbnail === "gradient-1"
-                      ? "bg-gradient-to-br from-primary/30 to-accent/20"
-                      : project.thumbnail === "gradient-2"
-                        ? "bg-gradient-to-br from-accent/30 to-chart-3/20"
-                        : "bg-gradient-to-br from-chart-3/30 to-primary/20"
+                        ? "bg-gradient-to-br from-primary/30 to-accent/20"
+                        : project.thumbnail === "gradient-2"
+                          ? "bg-gradient-to-br from-accent/30 to-chart-3/20"
+                          : "bg-gradient-to-br from-chart-3/30 to-primary/20"
                       }`}>
                       <div className="w-full h-full flex items-center justify-center">
                         <div className="w-16 h-20 bg-card/80 rounded-lg shadow-lg flex items-center justify-center">

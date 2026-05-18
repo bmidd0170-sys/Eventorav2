@@ -12,9 +12,11 @@ type InvitationPage = {
 }
 
 export function PublicInvitationView({
+  eventId,
   title,
   pages,
 }: {
+  eventId: string
   title: string
   pages: InvitationPage[]
 }) {
@@ -42,6 +44,7 @@ export function PublicInvitationView({
 
         <div className="rounded-2xl border border-border/60 bg-card shadow-xl overflow-hidden">
           <InvitationPageRenderer
+            eventId={eventId}
             page={currentPage}
             rsvpResponse={rsvpResponse}
             setRsvpResponse={setRsvpResponse}

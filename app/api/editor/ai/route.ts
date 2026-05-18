@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { getAuthenticatedDbUser } from "@/lib/api-auth"
 
 type EditorRequest = {
   prompt: string
@@ -92,6 +93,11 @@ export const runtime = "nodejs"
 const defaultModel = process.env.OPENAI_MODEL || "gpt-4o-mini"
 
 export async function POST(req: NextRequest) {
+  const authenticatedUser = await getAuthenticatedDbUser(req)
+  if (!authenticatedUser) {
+    return new NextResponse(null, { status: 204 })
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
 
   let body: EditorRequest
@@ -104,8 +110,7 @@ export async function POST(req: NextRequest) {
 
   if (!apiKey) {
     return NextResponse.json({
-      reply: defaultReply(body),
-      actions: [],
+      ...demoBuildResponse(body.prompt, body.activePage),
       source: "fallback",
     })
   }
@@ -213,8 +218,7 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
 
   if (!response.ok) {
     return NextResponse.json({
-      reply: defaultReply(body),
-      actions: [],
+      ...demoBuildResponse(body.prompt, body.activePage),
       source: "fallback",
     })
   }
@@ -229,10 +233,9 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
 
   const content = data.choices?.[0]?.message?.content
 
-  if (!content) {
+  if (content === null || content === undefined) {
     return NextResponse.json({
-      reply: defaultReply(body),
-      actions: [],
+      ...demoBuildResponse(body.prompt, body.activePage),
       source: "fallback",
     })
   }
@@ -240,23 +243,100 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
   let parsed: AiResponse
 
   try {
-    parsed = JSON.parse(content) as AiResponse
-  } catch {
+    if (typeof content === "object") {
+      parsed = content as AiResponse
+    } else if (typeof content === "string") {
+      parsed = JSON.parse(content) as AiResponse
+    } else {
+      // Unexpected shape from the model
+      throw new Error("Unexpected content type from AI response")
+    }
+  } catch (err) {
     return NextResponse.json({
-      reply: defaultReply(body),
-      actions: [],
+      ...demoBuildResponse(body.prompt, body.activePage),
       source: "fallback",
     })
   }
 
+  const fallbackResponse = demoBuildResponse(body.prompt, body.activePage)
+
   return NextResponse.json({
-    reply: typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : defaultReply(body),
+    reply: typeof parsed.reply === "string" && parsed.reply.trim() ? parsed.reply.trim() : fallbackResponse.reply,
     actions: sanitizeActions(parsed.actions),
   })
 }
 
-function defaultReply(body: EditorRequest) {
-  return `Let's make ${body.invitation.title} feel more alive. I can tune the hierarchy, spacing, tone, or add a page that supports the flow.`
+function demoBuildResponse(input: string, activePageId: string): AiResponse {
+  const lowerInput = input.toLowerCase()
+
+  if (lowerInput.includes("page") || lowerInput.includes("add") || lowerInput.includes("new")) {
+    return {
+      reply: "Mock build step 1: I would add a supporting page, move the flow there, and keep the copy focused so the invite unfolds more naturally.",
+      actions: [
+        {
+          type: "add_page",
+          pageType: "details",
+          name: "Details",
+          content: {
+            headline: "Event Details",
+            body: "The practical details stay clear, while the page still feels designed instead of purely functional.",
+          },
+        },
+        {
+          type: "focus_page",
+          pageId: activePageId,
+        },
+      ],
+    }
+  }
+
+  if (
+    lowerInput.includes("color") ||
+    lowerInput.includes("theme") ||
+    lowerInput.includes("brand") ||
+    lowerInput.includes("style") ||
+    lowerInput.includes("context")
+  ) {
+    return {
+      reply: "Mock build step 2: I would shift the context, tighten the hierarchy, and tune the page tone so the editor shows a stronger visual direction.",
+      actions: [
+        {
+          type: "patch_page",
+          pageId: activePageId,
+          content: {
+            headline: "A More Intentional Invitation",
+            subheadline: "Warmer contrast, calmer spacing, and a clearer reading path",
+            body: "This version keeps the page focused on the invite experience instead of the generic template feel.",
+          },
+        },
+      ],
+    }
+  }
+
+  const demoElementId = `demo-element-${Date.now()}`
+
+  return {
+    reply: "Mock build step 3: I would work directly in the editor canvas, add a supporting element, and refine the structure where the user can see the change immediately.",
+    actions: [
+      {
+        type: "add_element",
+        pageId: activePageId,
+        element: {
+          id: demoElementId,
+          type: "text",
+          order: 0,
+          content: {
+            text: "The layout now feels calmer, with a clearer rhythm and more breathing room.",
+          },
+        },
+      },
+      {
+        type: "focus_element",
+        pageId: activePageId,
+        elementId: demoElementId,
+      },
+    ],
+  }
 }
 
 function summarizeElements(elements: unknown): ElementSummary[] | undefined {

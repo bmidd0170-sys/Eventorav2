@@ -38,12 +38,17 @@ model UserNotificationSettings {
   userId                   String   @unique
   user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  emailWelcome             Boolean  @default(true)
+  emailTutorialComplete    Boolean  @default(true)
   emailRsvp                Boolean  @default(true)
   emailReminders           Boolean  @default(true)
   emailSecurity            Boolean  @default(true)
   emailMarketing           Boolean  @default(false)
-  emailConnectionsRequests Boolean  @default(true)
+  emailConnectionsOutgoing Boolean  @default(true)
+  emailConnectionsIncoming Boolean  @default(true)
   emailConnectionsAccepted Boolean  @default(true)
+  emailEventCancelled      Boolean  @default(true)
+  emailAppUpdates          Boolean  @default(true)
   pushRsvp                 Boolean  @default(true)
   pushReminders            Boolean  @default(true)
   pushTips                 Boolean  @default(false)

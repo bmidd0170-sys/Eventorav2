@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { buildWelcomeEmail } from '@/lib/email-templates';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -56,14 +57,15 @@ export function SignupForm() {
         description: 'Account created successfully',
       });
       try {
+        const email = buildWelcomeEmail(values.email)
         await fetch('/api/send-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             to: values.email,
-            subject: 'Welcome to Eventora!',
-            text: `Welcome to Eventora! We're excited to help you create beautiful event invitations. Start by creating your first event.`,
-            html: `<p>Welcome to <strong>Eventora</strong>! We're excited to help you create beautiful event invitations.</p><p>Start by creating your first event.</p>`,
+            subject: email.subject,
+            text: email.text,
+            html: email.html,
             fromName: 'Eventora',
           }),
         })

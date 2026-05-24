@@ -8,9 +8,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, User, Check } from "lucide-react"
-import { createUserWithEmailAndPassword, GoogleAuthProvider, getRedirectResult, signInWithRedirect, onAuthStateChanged } from 'firebase/auth'
+import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { saveCurrentUserProfile } from '@/lib/profile'
+import { requestGoogleAccessToken } from '@/lib/google-auth'
+import { hasReadAllLegalPages, subscribeLegalReadChanges } from '@/lib/legal-read'
 
 export default function GetStartedPage() {
   const router = useRouter()
@@ -18,7 +20,6 @@ export default function GetStartedPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [step, setStep] = useState<"signup" | "details">("signup")
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
-  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -26,48 +27,40 @@ export default function GetStartedPage() {
     agreeToTerms: false,
     receiveUpdates: true,
   })
+  const canContinue = hasReadAllLegalPages()
+
+  useEffect(() => {
+    setFormData((current) => (current.agreeToTerms === canContinue ? current : { ...current, agreeToTerms: canContinue }))
+
+    return subscribeLegalReadChanges(() => {
+      const allowed = hasReadAllLegalPages()
+      setFormData((current) => (current.agreeToTerms === allowed ? current : { ...current, agreeToTerms: allowed }))
+    })
+  }, [canContinue])
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
-      if (user && !isCheckingRedirect) {
-        window.location.replace('/home')
+      if (user) {
+        router.replace('/home')
       }
     })
-  }, [router, isCheckingRedirect])
-
-  useEffect(() => {
-    let isActive = true
-
-    async function handleRedirectResult() {
-      try {
-        const userCredential = await getRedirectResult(auth)
-        if (!isActive || !userCredential?.user) return
-
-        await saveCurrentUserProfile({
-          displayName: userCredential.user.displayName || userCredential.user.email?.split("@")[0] || null,
-          photoUrl: userCredential.user.photoURL || null,
-        })
-
-        window.location.replace('/home')
-      } catch (err: any) {
-        alert(err?.message || 'Google sign-in failed')
-      } finally {
-        if (isActive) setIsCheckingRedirect(false)
-      }
-    }
-
-    void handleRedirectResult()
-
-    return () => {
-      isActive = false
-    }
-  }, [])
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (step === "signup") {
+      if (!canContinue) {
+        alert('Please agree to the Terms of Service and Privacy Policy before continuing.')
+        return
+      }
+
       setStep("details")
+      return
+    }
+
+    if (!canContinue) {
+      alert('Please agree to the Terms of Service and Privacy Policy before creating an account.')
       return
     }
 
@@ -75,7 +68,7 @@ export default function GetStartedPage() {
     try {
       await createUserWithEmailAndPassword(auth, formData.email, formData.password)
       await saveCurrentUserProfile({ displayName: formData.name })
-      window.location.replace('/home')
+      router.push('/home')
     } catch (err: any) {
       alert(err?.message || 'Failed to create account')
     } finally {
@@ -84,14 +77,20 @@ export default function GetStartedPage() {
   }
 
   async function handleGoogleSignIn() {
-    if (!formData.agreeToTerms) {
+    if (!canContinue) {
       alert('Please agree to the Terms of Service and Privacy Policy before continuing with Google.')
       return
     }
 
     try {
-      const provider = new GoogleAuthProvider()
-      await signInWithRedirect(auth, provider)
+      const accessToken = await requestGoogleAccessToken()
+      const credential = GoogleAuthProvider.credential(undefined, accessToken)
+      const userCredential = await signInWithCredential(auth, credential)
+      await saveCurrentUserProfile({
+        displayName: userCredential.user.displayName || userCredential.user.email?.split("@")[0] || null,
+        photoUrl: userCredential.user.photoURL || null,
+      })
+      router.replace('/home')
     } catch (err: any) {
       alert(err?.message || 'Google sign-in failed')
     }
@@ -127,7 +126,7 @@ export default function GetStartedPage() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-semibold">Eventora</span>
+            <span className="text-2xl font-semibold">Invyra</span>
           </Link>
 
           <div className="mb-8">
@@ -149,6 +148,12 @@ export default function GetStartedPage() {
           </div>
 
           {step === "signup" ? (
+            <p className="mb-6 text-sm leading-6 text-muted-foreground">
+              Read the Terms of Service and Privacy Policy to unlock sign up.
+            </p>
+          ) : null}
+
+          {step === "signup" ? (
             <>
               {/* Social sign up */}
               <div className="space-y-3 mb-6">
@@ -157,7 +162,7 @@ export default function GetStartedPage() {
                   className="w-full h-12 text-base"
                   type="button"
                   onClick={handleGoogleSignIn}
-                  disabled={!formData.agreeToTerms}
+                  disabled={!canContinue}
                 >
                   <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                     <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
@@ -167,9 +172,6 @@ export default function GetStartedPage() {
                   </svg>
                   Continue with Google
                 </Button>
-                <p className="text-xs text-muted-foreground text-center leading-relaxed px-2">
-                  Please check the Terms of Service and Privacy Policy box before continuing with Google.
-                </p>
               </div>
 
               <div className="relative mb-6">
@@ -270,8 +272,9 @@ export default function GetStartedPage() {
                   <div className="flex items-start gap-2">
                     <Checkbox
                       id="terms"
-                      checked={formData.agreeToTerms}
+                      checked={canContinue}
                       onCheckedChange={(checked) => setFormData({ ...formData, agreeToTerms: checked as boolean })}
+                      disabled={!canContinue}
                       className="mt-0.5"
                     />
                     <Label htmlFor="terms" className="text-sm font-normal cursor-pointer leading-tight">
@@ -281,7 +284,9 @@ export default function GetStartedPage() {
                       <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
                     </Label>
                   </div>
+                </div>
 
+                <div className="space-y-3">
                   <div className="flex items-start gap-2">
                     <Checkbox
                       id="updates"
@@ -298,7 +303,7 @@ export default function GetStartedPage() {
                 <Button
                   type="submit"
                   className="w-full h-12 text-base gradient-primary border-0 text-white"
-                  disabled={!formData.agreeToTerms}
+                  disabled={!canContinue}
                 >
                   <span className="flex items-center gap-2">
                     Continue
@@ -318,7 +323,7 @@ export default function GetStartedPage() {
                   { id: "personal", label: "Personal use", desc: "Planning my own events" },
                   { id: "business", label: "Small Business", desc: "Creating events for clients" },
                   { id: "agency", label: "Agencies/Team", desc: "Managing multiple brands" },
-                  { id: "other", label: "Just exploring", desc: "Checking out what Eventora can do" },
+                  { id: "other", label: "Just exploring", desc: "Checking out what Invyra can do" },
                 ].map((option) => {
                   const isSelected = selectedOption === option.id
                   return (
@@ -396,7 +401,7 @@ export default function GetStartedPage() {
           </h1>
 
           <p className="text-muted-foreground text-lg mb-10 max-w-md">
-            Join thousands of creators who use Eventora to design beautiful, personalized invitations.
+            Join thousands of creators who use Invyra to design beautiful, personalized invitations.
           </p>
 
           {/* Features list */}
@@ -414,7 +419,7 @@ export default function GetStartedPage() {
           {/* Testimonial */}
           <div className="mt-12 p-6 rounded-2xl bg-card/50 backdrop-blur-sm border border-border/50 max-w-sm">
             <p className="text-sm mb-4 leading-relaxed">
-              &quot;Eventora made planning my wedding invitations so easy. The AI suggestions were spot-on and saved me hours of design work.&quot;
+              &quot;Invyra made planning my wedding invitations so easy. The AI suggestions were spot-on and saved me hours of design work.&quot;
             </p>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-full gradient-primary" />

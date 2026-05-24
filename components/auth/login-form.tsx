@@ -54,9 +54,9 @@ export function LoginForm() {
         if (uid) {
           await sendEmailIfAllowed(uid, 'emailSecurity', {
             to: values.email,
-            subject: 'New sign-in to your Eventora account',
-            text: `We detected a sign-in to your Eventora account. If this wasn't you, please secure your account.`,
-            html: `<p>We detected a sign-in to your <strong>Eventora</strong> account. If this wasn't you, please secure your account.</p>`,
+            subject: 'New sign-in to your Invyra account',
+            text: `We detected a sign-in to your Invyra account. If this wasn't you, please secure your account.`,
+            html: `<p>We detected a sign-in to your <strong>Invyra</strong> account. If this wasn't you, please secure your account.</p>`,
           })
         }
       } catch (e) {

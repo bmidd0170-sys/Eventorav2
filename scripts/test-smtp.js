@@ -27,9 +27,9 @@ async function main() {
     const info = await transporter.sendMail({
       from,
       to,
-      subject: 'Eventora SMTP test',
-      text: 'This is a test email sent from Eventora test script.',
-      html: '<p>This is a <strong>test email</strong> sent from Eventora test script.</p>',
+      subject: 'Invyra SMTP test',
+      text: 'This is a test email sent from Invyra test script.',
+      html: '<p>This is a <strong>test email</strong> sent from Invyra test script.</p>',
     })
     console.log('Message sent:', info && info.messageId ? info.messageId : info)
     process.exit(0)

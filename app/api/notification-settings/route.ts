@@ -20,23 +20,18 @@ export async function GET(req: NextRequest) {
 
     const settings = stored
       ? {
-          emailWelcome: stored.emailWelcome,
-          emailTutorialComplete: stored.emailTutorialComplete,
-          emailRsvp: stored.emailRsvp,
-          emailReminders: stored.emailReminders,
-          emailSecurity: stored.emailSecurity,
-          emailMarketing: stored.emailMarketing,
-          emailConnectionsOutgoing: stored.emailConnectionsOutgoing,
-          emailConnectionsIncoming: stored.emailConnectionsIncoming,
-          emailConnectionsAccepted: stored.emailConnectionsAccepted,
-          emailEventCancelled: stored.emailEventCancelled,
-          emailAppUpdates: stored.emailAppUpdates,
-          pushRsvp: stored.pushRsvp,
-          pushReminders: stored.pushReminders,
-          pushTips: stored.pushTips,
-          pushConnectionsRequests: stored.pushConnectionsRequests,
-          pushConnectionsAccepted: stored.pushConnectionsAccepted,
-        }
+        emailRsvp: stored.emailRsvp,
+        emailReminders: stored.emailReminders,
+        emailSecurity: stored.emailSecurity,
+        emailMarketing: stored.emailMarketing,
+        emailConnectionsRequests: stored.emailConnectionsRequests,
+        emailConnectionsAccepted: stored.emailConnectionsAccepted,
+        pushRsvp: stored.pushRsvp,
+        pushReminders: stored.pushReminders,
+        pushTips: stored.pushTips,
+        pushConnectionsRequests: stored.pushConnectionsRequests,
+        pushConnectionsAccepted: stored.pushConnectionsAccepted,
+      }
       : defaultNotificationSettings
 
     return NextResponse.json({ settings: serializeSettings(settings) }, { status: 200 })
@@ -67,17 +62,12 @@ export async function PUT(req: NextRequest) {
 
     return NextResponse.json({
       settings: {
-        emailWelcome: saved.emailWelcome,
-        emailTutorialComplete: saved.emailTutorialComplete,
         emailRsvp: saved.emailRsvp,
         emailReminders: saved.emailReminders,
         emailSecurity: saved.emailSecurity,
         emailMarketing: saved.emailMarketing,
-        emailConnectionsOutgoing: saved.emailConnectionsOutgoing,
-        emailConnectionsIncoming: saved.emailConnectionsIncoming,
+        emailConnectionsRequests: saved.emailConnectionsRequests,
         emailConnectionsAccepted: saved.emailConnectionsAccepted,
-        emailEventCancelled: saved.emailEventCancelled,
-        emailAppUpdates: saved.emailAppUpdates,
         pushRsvp: saved.pushRsvp,
         pushReminders: saved.pushReminders,
         pushTips: saved.pushTips,

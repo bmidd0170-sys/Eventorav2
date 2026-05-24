@@ -38,7 +38,7 @@ export function Footer() {
               <div className="w-8 h-8 rounded-xl gradient-primary flex items-center justify-center">
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
-              <span className="text-xl font-semibold tracking-tight">Eventora</span>
+              <span className="text-xl font-semibold tracking-tight">Invyra</span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs leading-relaxed">
               AI-powered event invitations that bring your celebrations to life.
@@ -52,8 +52,8 @@ export function Footer() {
               <ul className="space-y-3">
                 {links.map((link) => (
                   <li key={link.label}>
-                    <Link 
-                      href={link.href} 
+                    <Link
+                      href={link.href}
                       className="text-sm text-muted-foreground hover:text-foreground transition-smooth"
                     >
                       {link.label}
@@ -67,7 +67,7 @@ export function Footer() {
 
         <div className="mt-16 pt-8 border-t border-border/50 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-xs text-muted-foreground">
-            {new Date().getFullYear()} Eventora. All rights reserved.
+            {new Date().getFullYear()} Invyra. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             <Link href="#" className="text-xs text-muted-foreground hover:text-foreground transition-smooth">

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
 import { PublicInvitationView } from "./public-invitation-view"
+import type { BrandSettings } from "@/lib/branding"
 
 type InvitationPage = {
   id: string
@@ -11,6 +12,11 @@ type InvitationPage = {
 }
 
 type EventPagesPayload = Prisma.JsonValue | null | undefined
+
+type NormalizedInvitationData = {
+  pages: InvitationPage[]
+  brand: BrandSettings | null
+}
 
 function isInvitationPage(value: unknown): value is InvitationPage {
   if (!value || typeof value !== "object") {
@@ -38,6 +44,22 @@ function normalizePages(payload: EventPagesPayload): InvitationPage[] {
   }
 
   return pagesSource.filter(isInvitationPage)
+}
+
+function normalizeInvitationData(payload: EventPagesPayload): NormalizedInvitationData {
+  if (Array.isArray(payload)) {
+    return { pages: normalizePages(payload), brand: null }
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return { pages: [], brand: null }
+  }
+
+  const pages = normalizePages(payload)
+  const brandValue = (payload as { brand?: unknown }).brand
+  const brand = brandValue && typeof brandValue === "object" ? (brandValue as BrandSettings) : null
+
+  return { pages, brand }
 }
 
 function fallbackPages(title: string, startDate: Date): InvitationPage[] {
@@ -96,8 +118,8 @@ export default async function SharedInvitationPage({
     notFound()
   }
 
-  const pages = normalizePages(event.pagesData)
+  const { pages, brand } = normalizeInvitationData(event.pagesData)
   const safePages = pages.length > 0 ? pages : fallbackPages(event.title, event.startDate)
 
-  return <PublicInvitationView eventId={event.id} title={event.title} pages={safePages} />
+  return <PublicInvitationView eventId={event.id} title={event.title} pages={safePages} brand={brand} />
 }

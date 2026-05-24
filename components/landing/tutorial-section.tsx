@@ -8,7 +8,7 @@ const steps = [
     icon: Sparkles,
     title: "1. Start on the homepage",
     description:
-      "Read the hero, scan the feature cards, and use the landing page sections to understand what Eventora can do.",
+      "Read the hero, scan the feature cards, and use the landing page sections to understand what Invyra can do.",
     href: "/",
     linkLabel: "Go to home",
   },
@@ -56,7 +56,7 @@ export function TutorialSection() {
             <span className="text-xs font-medium text-primary">Guide for new users</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-semibold tracking-tight mb-4">
-            How to get started with <span className="gradient-text">Eventora</span>
+            How to get started with <span className="gradient-text">Invyra</span>
           </h2>
           <p className="text-muted-foreground leading-relaxed">
             If you are visiting for the first time, follow these steps to learn where everything is,

@@ -63,7 +63,7 @@ export default function GuestListRoutePage() {
         const loadData = async () => {
             try {
                 if (eventId === TUTORIAL_PREVIEW_EVENT_ID) {
-                    const stored = localStorage.getItem("eventora-preview-data")
+                    const stored = localStorage.getItem("invyra-preview-data")
                     const preview = stored ? JSON.parse(stored) : null
                     setInvitation(buildTutorialPreviewInvitation(preview?.title || "Tutorial Preview"))
                     setGuests(tutorialPreviewGuests)
@@ -96,7 +96,7 @@ export default function GuestListRoutePage() {
                 const event = eventData.events?.find((e: any) => e.id === eventId)
 
                 if (!event) {
-                    const stored = localStorage.getItem("eventora-preview-data")
+                    const stored = localStorage.getItem("invyra-preview-data")
                     if (stored) {
                         const preview = JSON.parse(stored)
                         setInvitation(buildTutorialPreviewInvitation(preview?.title || "Tutorial Preview"))
@@ -182,5 +182,5 @@ export default function GuestListRoutePage() {
         )
     }
 
-    return <GuestListPage invitation={invitation} guests={guests} />
+    return <GuestListPage invitation={invitation} guests={guests} canManagePublication={eventId !== TUTORIAL_PREVIEW_EVENT_ID} />
 }

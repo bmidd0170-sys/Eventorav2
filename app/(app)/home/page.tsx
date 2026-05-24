@@ -64,7 +64,7 @@ export default function HomePage() {
   const [inputValue, setInputValue] = useState("")
   const [isFocused, setIsFocused] = useState(false)
   const [isDropOpen, setIsDropOpen] = useState(false)
-  const [attachments, setAttachments] = useState<Array<{ id: string; file: File; preview: string }>>([])
+  const [attachments, setAttachments] = useState<Array<{ id: string; file: File; preview: string; dataUrl: string }>>([])
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [isLoadingProjects, setIsLoadingProjects] = useState(true)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -80,16 +80,47 @@ export default function HomePage() {
     return `draft-${Date.now()}`
   }
 
+  const persistDraftImages = (draftId: string) => {
+    if (typeof window === "undefined" || attachments.length === 0) {
+      return
+    }
+
+    const payload = attachments.map((attachment) => ({
+      name: attachment.file.name,
+      type: attachment.file.type,
+      data: attachment.dataUrl,
+    }))
+
+    sessionStorage.setItem(`invyra-draft-images:${draftId}`, JSON.stringify(payload))
+  }
+
+  const buildPrompt = () => {
+    const trimmedPrompt = inputValue.trim()
+    if (trimmedPrompt) {
+      return trimmedPrompt
+    }
+
+    if (attachments.length > 0) {
+      return "Create an invitation inspired by these uploaded images."
+    }
+
+    return ""
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (inputValue.trim()) {
+    const prompt = buildPrompt()
+
+    if (prompt) {
       const draftId = createDraftId()
-      router.push(`/editor?prompt=${encodeURIComponent(inputValue.trim())}&event=${encodeURIComponent(draftId)}`)
+      persistDraftImages(draftId)
+      router.push(`/editor?prompt=${encodeURIComponent(prompt)}&event=${encodeURIComponent(draftId)}`)
     }
   }
 
   const handleQuickPrompt = (prompt: string) => {
     const draftId = createDraftId()
+    persistDraftImages(draftId)
     router.push(`/editor?prompt=${encodeURIComponent(prompt)}&event=${encodeURIComponent(draftId)}`)
   }
 
@@ -102,7 +133,7 @@ export default function HomePage() {
 
   useEffect(() => {
     return () => {
-      // Revoke object URLs on unmount
+      // Release any preview URLs if we ever swap back to blob-based previews.
       attachments.forEach((a) => URL.revokeObjectURL(a.preview))
     }
   }, [attachments])
@@ -176,14 +207,28 @@ export default function HomePage() {
     return () => unsubscribe()
   }, [])
 
-  const handleFiles = (files: FileList | null) => {
+  const handleFiles = async (files: FileList | null) => {
     if (!files) return
+
     const allowed = Array.from(files).filter((f) => /image\/(png|jpe?g)/.test(f.type))
-    const newAttachments = allowed.map((file) => ({
-      id: `${Date.now()}-${Math.random()}`,
-      file,
-      preview: URL.createObjectURL(file),
-    }))
+    const newAttachments = await Promise.all(
+      allowed.map(async (file) => {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(String(reader.result ?? ""))
+          reader.onerror = () => reject(reader.error ?? new Error("Failed to read image file"))
+          reader.readAsDataURL(file)
+        })
+
+        return {
+          id: `${Date.now()}-${Math.random()}`,
+          file,
+          preview: dataUrl,
+          dataUrl,
+        }
+      })
+    )
+
     setAttachments((s) => [...s, ...newAttachments])
   }
 
@@ -329,8 +374,8 @@ export default function HomePage() {
                 <Button
                   type="submit"
                   size="icon"
-                  disabled={!inputValue.trim()}
-                  className={`h-8 w-8 rounded-lg transition-all ${inputValue.trim()
+                  disabled={!(inputValue.trim() || attachments.length > 0)}
+                  className={`h-8 w-8 rounded-lg transition-all ${(inputValue.trim() || attachments.length > 0)
                       ? "gradient-primary border-0 text-white"
                       : "bg-secondary text-muted-foreground"
                     }`}

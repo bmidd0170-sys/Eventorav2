@@ -2,18 +2,19 @@ import type { Metadata } from 'next'
 import { LegalPage } from '@/components/legal/legal-page'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy - Eventora',
-  description: 'Eventora Privacy Policy',
+  title: 'Privacy Policy - Invyra',
+  description: 'Invyra Privacy Policy',
 }
 
 export default function PrivacyPage() {
   return (
     <LegalPage
-      title="Eventora Privacy Policy"
-      subtitle="This Privacy Policy explains how Eventora collects, uses, stores, and protects information when you use our platform."
+      legalKey="privacy"
+      title="Invyra Privacy Policy"
+      subtitle="This Privacy Policy explains how Invyra collects, uses, stores, and protects information when you use our platform."
       effectiveDate="Effective Date: May 7, 2026"
-      contactEmail="support@eventora.app"
-      overview="Eventora values your privacy. This policy describes the categories of information we collect, why we collect it, how we share it, and the rights you may have depending on your location."
+      contactEmail="support@invyra.app"
+      overview="Invyra values your privacy. This policy describes the categories of information we collect, why we collect it, how we share it, and the rights you may have depending on your location."
       sidebarTitle="Privacy highlights"
       sidebarItems={[
         'We do not sell personal data',
@@ -77,27 +78,27 @@ export default function PrivacyPage() {
         {
           title: '8. Your Rights',
           bullets: ['Access your data', 'Correct inaccurate information', 'Delete your information', 'Export your data', 'Restrict certain processing', 'Withdraw consent'],
-          paragraphs: ['To exercise these rights, contact support@eventora.app.'],
+          paragraphs: ['To exercise these rights, contact support@invyra.app.'],
         },
         {
           title: '9. Cookies & Analytics',
-          paragraphs: ['Eventora may use cookies and analytics tools to maintain sessions, improve performance, understand feature usage, and personalize experiences. Users may manage cookie settings through their browser.'],
+          paragraphs: ['Invyra may use cookies and analytics tools to maintain sessions, improve performance, understand feature usage, and personalize experiences. Users may manage cookie settings through their browser.'],
         },
         {
           title: '10. Children\'s Privacy',
-          paragraphs: ['Eventora is not intended for children under 13. We do not knowingly collect personal information from children under 13.'],
+          paragraphs: ['Invyra is not intended for children under 13. We do not knowingly collect personal information from children under 13.'],
         },
         {
           title: '11. International Users',
-          paragraphs: ['If you access Eventora from outside the United States, your information may be processed in countries with different data protection laws.'],
+          paragraphs: ['If you access Invyra from outside the United States, your information may be processed in countries with different data protection laws.'],
         },
         {
           title: '12. Changes to This Privacy Policy',
-          paragraphs: ['We may update this Privacy Policy periodically. Continued use of Eventora after updates constitutes acceptance of the revised policy.'],
+          paragraphs: ['We may update this Privacy Policy periodically. Continued use of Invyra after updates constitutes acceptance of the revised policy.'],
         },
         {
           title: '13. Contact Us',
-          paragraphs: ['For privacy-related questions or requests, email support@eventora.app.'],
+          paragraphs: ['For privacy-related questions or requests, email support@invyra.app.'],
         },
       ]}
     />

@@ -66,7 +66,7 @@ export function SignupForm() {
             subject: email.subject,
             text: email.text,
             html: email.html,
-            fromName: 'Eventora',
+            fromName: 'Invyra',
           }),
         })
       } catch (e) {

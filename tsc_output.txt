@@ -1,0 +1,14 @@
+app/(app)/publish/confirm/page.tsx(71,53): error TS2345: Argument of type '() => string' is not assignable to parameter of type '"PM" | "AM" | (() => "PM" | "AM")'.
+  Type '() => string' is not assignable to type '() => "PM" | "AM"'.
+    Type 'string' is not assignable to type '"PM" | "AM"'.
+app/(app)/publish/confirm/page.tsx(72,151): error TS2345: Argument of type 'string' is not assignable to parameter of type '"PM" | "AM"'.
+app/(app)/publish/confirm/page.tsx(79,15): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SetStateAction<"PM" | "AM">'.
+app/(app)/publish/confirm/page.tsx(80,84): error TS2345: Argument of type 'string' is not assignable to parameter of type '"PM" | "AM"'.
+app/(app)/publish/confirm/page.tsx(198,41): error TS2345: Argument of type 'string' is not assignable to parameter of type 'SetStateAction<"PM" | "AM">'.
+app/api/events/delete/route.ts(141,30): error TS2339: Property 'emailEventCancelled' does not exist on type 'NotificationSettings'.
+app/api/notifications/app-updates/route.ts(26,25): error TS2353: Object literal may only specify known properties, and 'emailAppUpdates' does not exist in type 'UserNotificationSettingsSelect<DefaultArgs>'.
+app/api/notifications/app-updates/route.ts(42,33): error TS2339: Property 'notificationSettings' does not exist on type '{ id: string; firebaseUid: string; email: string; displayName: string | null; photoUrl: string | null; hasCompletedTutorial: boolean; createdAt: Date; updatedAt: Date; }'.
+app/api/notifications/app-updates/route.ts(42,102): error TS2339: Property 'emailAppUpdates' does not exist on type 'NotificationSettings'.
+app/api/profile/tutorial-complete/route.ts(25,18): error TS2339: Property 'emailTutorialComplete' does not exist on type 'NotificationSettings'.
+app/i/[eventId]/public-invitation-view.tsx(50,13): error TS2322: Type '{ eventId: string; page: InvitationPage; rsvpResponse: "attending" | "not-attending" | null; setRsvpResponse: Dispatch<SetStateAction<"attending" | "not-attending" | null>>; brand: BrandSettings | ... 1 more ... | undefined; }' is not assignable to type 'IntrinsicAttributes & { page: InvitationPageLike; rsvpResponse?: "attending" | "not-attending" | null | undefined; setRsvpResponse?: ((response: "attending" | ... 1 more ... | null) => void) | undefined; brand?: BrandSettings | ... 1 more ... | undefined; }'.
+  Property 'eventId' does not exist on type 'IntrinsicAttributes & { page: InvitationPageLike; rsvpResponse?: "attending" | "not-attending" | null | undefined; setRsvpResponse?: ((response: "attending" | ... 1 more ... | null) => void) | undefined; brand?: BrandSettings | ... 1 more ... | undefined; }'.

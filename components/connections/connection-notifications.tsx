@@ -21,8 +21,7 @@ export default function ConnectionNotifications({ currentUserId, onNewRequest }:
 
     const pollRequests = async () => {
       try {
-        const data = await getPendingRequests(currentUserId)
-        const requests = data.incoming || []
+        const requests = await getPendingRequests(currentUserId)
         if (!active) {
           return
         }

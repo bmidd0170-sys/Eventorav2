@@ -5,6 +5,7 @@ import type { CSSProperties, ElementType, ReactNode } from "react"
 import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { useBrand } from "@/components/brand/brand-provider"
+import type { BrandSettings } from "@/lib/branding"
 import {
     Calendar,
     ChevronRight,
@@ -90,64 +91,163 @@ export interface InvitationPageLike {
 
 export function InvitationPageRenderer({
     page,
-    eventId,
     rsvpResponse,
     setRsvpResponse,
+    brand,
 }: {
     page: InvitationPageLike
-    eventId?: string
     rsvpResponse?: "attending" | "not-attending" | null
     setRsvpResponse?: (response: "attending" | "not-attending" | null) => void
+    brand?: BrandSettings | null
 }) {
-    const { brand } = useBrand()
+    const { brand: contextBrand } = useBrand()
     const [localRsvpResponse, setLocalRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
 
     if (!page) {
         return <div className="p-8 text-center text-muted-foreground">No page to display</div>
     }
 
+    const activeBrand = brand ?? contextBrand
     const activeRsvpResponse = rsvpResponse ?? localRsvpResponse
     const updateRsvpResponse = setRsvpResponse ?? setLocalRsvpResponse
-    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, eventId, brand)
+    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, activeBrand)
 
     return (
-        <div className="invitation-root">
+        <div className="invitation-root" style={getInvitationBrandStyles(activeBrand)}>
             {pageContent}
             <InvitationElements elements={page.content.elements} />
         </div>
     )
 }
 
+export function getInvitationBrandStyles(brand?: BrandSettings | null): CSSProperties {
+    if (!brand) {
+        return {}
+    }
+
+    const primary = brand.primaryColor?.trim()
+    const secondary = brand.secondaryColor?.trim()
+    const accent = brand.accentColor?.trim()
+    const headingFont = brand.headingFont?.trim()
+    const bodyFont = brand.bodyFont?.trim()
+
+    return {
+        ...(primary ? {
+            ["--brand-primary" as any]: primary,
+            ["--brand-heading-color" as any]: primary,
+            ["--primary" as any]: primary,
+            ["--ring" as any]: primary,
+            ["--chart-1" as any]: primary,
+        } : {}),
+        ...(secondary ? {
+            ["--brand-secondary" as any]: secondary,
+            ["--secondary" as any]: secondary,
+            ["--chart-3" as any]: secondary,
+        } : {}),
+        ...(accent ? {
+            ["--brand-accent" as any]: accent,
+            ["--accent" as any]: accent,
+            ["--chart-2" as any]: accent,
+        } : {}),
+        ...(bodyFont ? {
+            ["--brand-font-body" as any]: bodyFont,
+            ["--font-sans" as any]: bodyFont,
+            fontFamily: bodyFont,
+        } : {}),
+        ...(headingFont ? {
+            ["--brand-font-heading" as any]: headingFont,
+        } : {}),
+        ...(primary ? {
+            ["--background" as any]: `color-mix(in srgb, ${primary} 8%, oklch(0.13 0.01 270))`,
+            ["--card" as any]: `color-mix(in srgb, ${primary} 10%, oklch(0.17 0.015 270))`,
+            ["--popover" as any]: `color-mix(in srgb, ${primary} 10%, oklch(0.17 0.015 270))`,
+            ["--muted" as any]: `color-mix(in srgb, ${primary} 8%, oklch(0.25 0.015 270))`,
+            ["--border" as any]: `color-mix(in srgb, ${primary} 18%, oklch(0.30 0.02 270))`,
+            ["--input" as any]: `color-mix(in srgb, ${primary} 14%, oklch(0.22 0.02 270))`,
+        } : {}),
+    }
+}
+
 function renderPage(
     page: InvitationPageLike,
     rsvpResponse: "attending" | "not-attending" | null,
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void,
-    eventId?: string,
-    brand?: {
-        defaultHeadline?: string
-        defaultSubheadline?: string
-        defaultCtaLabel?: string
-    } | null
+    brand?: BrandSettings | null
 ): ReactNode {
     switch (page.type) {
         case "cover":
             return <CoverPage content={page.content} icon={page.icon ?? FileText} brand={brand} />
         case "details":
-            return <DetailsPage content={page.content} />
+            return <DetailsPage content={page.content} brand={brand} />
         case "rsvp":
-            return <RSVPPage content={page.content} eventId={eventId} rsvpResponse={rsvpResponse} setRsvpResponse={setRsvpResponse} />
+            return <RSVPPage content={page.content} rsvpResponse={rsvpResponse} setRsvpResponse={setRsvpResponse} brand={brand} />
         case "location":
-            return <LocationPage content={page.content} />
+            return <LocationPage content={page.content} brand={brand} />
         case "schedule":
-            return <SchedulePage content={page.content} />
+            return <SchedulePage content={page.content} brand={brand} />
         case "gallery":
-            return <GalleryPage content={page.content} />
+            return <GalleryPage content={page.content} brand={brand} />
         case "registry":
-            return <RegistryPage content={page.content} />
+            return <RegistryPage content={page.content} brand={brand} />
         case "faq":
-            return <FAQPage content={page.content} />
+            return <FAQPage content={page.content} brand={brand} />
         default:
-            return <GenericPage content={page.content} type={page.type} />
+            return <GenericPage content={page.content} type={page.type} brand={brand} />
+    }
+}
+
+function getBrandPalette(brand?: BrandSettings | null) {
+    return {
+        primary: brand?.primaryColor?.trim(),
+        secondary: brand?.secondaryColor?.trim(),
+        accent: brand?.accentColor?.trim(),
+        headingFont: brand?.headingFont?.trim(),
+        bodyFont: brand?.bodyFont?.trim(),
+    }
+}
+
+function getThemedCardStyle(brand?: BrandSettings | null, variant: "primary" | "secondary" | "accent" = "primary"): CSSProperties {
+    const palette = getBrandPalette(brand)
+    const tone = variant === "primary" ? palette.primary : variant === "secondary" ? palette.secondary : palette.accent
+
+    if (!tone) {
+        return {}
+    }
+
+    return {
+        background: `linear-gradient(180deg, color-mix(in srgb, ${tone} 12%, var(--card)) 0%, color-mix(in srgb, ${tone} 5%, var(--card)) 100%)`,
+        border: `1px solid color-mix(in srgb, ${tone} 18%, var(--border))`,
+        boxShadow: `0 10px 30px color-mix(in srgb, ${tone} 14%, transparent)`,
+    }
+}
+
+function getThemedIconChipStyle(brand?: BrandSettings | null, variant: "primary" | "secondary" | "accent" = "primary"): CSSProperties {
+    const palette = getBrandPalette(brand)
+    const tone = variant === "primary" ? palette.primary : variant === "secondary" ? palette.secondary : palette.accent
+
+    if (!tone) {
+        return {}
+    }
+
+    return {
+        background: `color-mix(in srgb, ${tone} 16%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${tone} 24%, transparent)`,
+        color: tone,
+    }
+}
+
+function getHeadingStyle(brand?: BrandSettings | null): CSSProperties {
+    const palette = getBrandPalette(brand)
+    return {
+        color: palette.primary || "var(--foreground)",
+        fontFamily: palette.headingFont || "var(--font-sans)",
+    }
+}
+
+function getBodyStyle(brand?: BrandSettings | null): CSSProperties {
+    const palette = getBrandPalette(brand)
+    return {
+        fontFamily: palette.bodyFont || "var(--font-sans)",
     }
 }
 
@@ -328,18 +428,18 @@ function CoverPage({
     )
 }
 
-function DetailsPage({ content }: { content: InvitationPageContent }) {
+function DetailsPage({ content, brand }: { content: InvitationPageContent; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-6">
+        <div className="p-6 md:p-8 space-y-6" style={getBodyStyle(brand)}>
             <div className="text-center space-y-2">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Event Details"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "Event Details"}</h2>
             </div>
 
             <div className="space-y-3">
                 {content.date && (
-                    <div className="flex items-start gap-3 p-3 bg-secondary/50 rounded-xl">
-                        <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center shrink-0">
-                            <Calendar className="w-4 h-4 text-primary" />
+                    <div className="flex items-start gap-3 p-3 rounded-xl" style={getThemedCardStyle(brand, "primary")}>
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={getThemedIconChipStyle(brand, "primary")}>
+                            <Calendar className="w-4 h-4" style={getHeadingStyle(brand)} />
                         </div>
                         <div>
                             <p className="text-xs text-muted-foreground">Date</p>
@@ -349,9 +449,9 @@ function DetailsPage({ content }: { content: InvitationPageContent }) {
                 )}
 
                 {content.time && (
-                    <div className="flex items-start gap-3 p-3 bg-secondary/50 rounded-xl">
-                        <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center shrink-0">
-                            <Clock className="w-4 h-4 text-accent" />
+                    <div className="flex items-start gap-3 p-3 rounded-xl" style={getThemedCardStyle(brand, "accent")}>
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={getThemedIconChipStyle(brand, "accent")}>
+                            <Clock className="w-4 h-4" style={brand?.accentColor ? { color: brand.accentColor } : undefined} />
                         </div>
                         <div>
                             <p className="text-xs text-muted-foreground">Time</p>
@@ -361,9 +461,9 @@ function DetailsPage({ content }: { content: InvitationPageContent }) {
                 )}
 
                 {content.location && (
-                    <div className="flex items-start gap-3 p-3 bg-secondary/50 rounded-xl">
-                        <div className="w-9 h-9 rounded-lg bg-chart-3/20 flex items-center justify-center shrink-0">
-                            <MapPin className="w-4 h-4 text-chart-3" />
+                    <div className="flex items-start gap-3 p-3 rounded-xl" style={getThemedCardStyle(brand, "secondary")}>
+                        <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={getThemedIconChipStyle(brand, "secondary")}>
+                            <MapPin className="w-4 h-4" style={brand?.secondaryColor ? { color: brand.secondaryColor } : undefined} />
                         </div>
                         <div>
                             <p className="text-xs text-muted-foreground">Location</p>
@@ -392,53 +492,16 @@ function DetailsPage({ content }: { content: InvitationPageContent }) {
 
 function RSVPPage({
     content,
-    eventId,
     rsvpResponse,
     setRsvpResponse,
+    brand,
 }: {
     content: InvitationPageContent
-    eventId?: string
     rsvpResponse: "attending" | "not-attending" | null
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void
+    brand?: BrandSettings | null
 }) {
     const [submitted, setSubmitted] = useState(false)
-    const [guestEmail, setGuestEmail] = useState("")
-    const [isSubmitting, setIsSubmitting] = useState(false)
-    const [submitError, setSubmitError] = useState<string | null>(null)
-
-    const handleSubmit = async () => {
-        const trimmedEmail = guestEmail.trim().toLowerCase()
-        if (!eventId || !trimmedEmail || !rsvpResponse) {
-            setSubmitError("Please choose a response and enter your email address.")
-            return
-        }
-
-        setIsSubmitting(true)
-        setSubmitError(null)
-
-        try {
-            const response = await fetch("/api/invitations/respond", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    eventId,
-                    guestEmail: trimmedEmail,
-                    response: rsvpResponse,
-                }),
-            })
-
-            if (!response.ok) {
-                throw new Error("Failed to save RSVP")
-            }
-
-            setSubmitted(true)
-        } catch (error) {
-            console.error("Failed to submit RSVP", error)
-            setSubmitError("We could not save your RSVP right now. Please try again.")
-        } finally {
-            setIsSubmitting(false)
-        }
-    }
 
     if (submitted) {
         return (
@@ -453,42 +516,33 @@ function RSVPPage({
     }
 
     return (
-        <div className="p-6 md:p-8 space-y-5">
+            <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "RSVP"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "RSVP"}</h2>
                 {content.subheadline && <p className="text-muted-foreground text-sm">{content.subheadline}</p>}
-            </div>
-
-            <div className="space-y-1.5">
-                <label className="text-sm font-medium">Email address</label>
-                <input
-                    type="email"
-                    value={guestEmail}
-                    onChange={(event) => setGuestEmail(event.target.value)}
-                    className="w-full px-3 py-2 bg-secondary rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    placeholder="you@example.com"
-                />
             </div>
 
             <div className="flex gap-3">
                 <button
                     onClick={() => setRsvpResponse("attending")}
                     className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "attending"
-                            ? "border-accent bg-accent/10 text-accent"
-                            : "border-border/50 hover:border-accent/50"
+                            ? "text-foreground"
+                            : "border-border/50"
                         }`}
+                    style={rsvpResponse === "attending" ? getThemedCardStyle(brand, "accent") : undefined}
                 >
-                    <p className="font-medium text-sm">Attending</p>
+                    <p className="font-medium text-sm" style={rsvpResponse === "attending" && brand?.accentColor ? { color: brand.accentColor } : undefined}>Attending</p>
                     <p className="text-xs text-muted-foreground mt-0.5">Count me in!</p>
                 </button>
                 <button
                     onClick={() => setRsvpResponse("not-attending")}
                     className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "not-attending"
-                            ? "border-destructive bg-destructive/10 text-destructive"
-                            : "border-border/50 hover:border-destructive/50"
+                            ? "text-foreground"
+                            : "border-border/50"
                         }`}
+                    style={rsvpResponse === "not-attending" ? getThemedCardStyle(brand, "secondary") : undefined}
                 >
-                    <p className="font-medium text-sm">Not Attending</p>
+                    <p className="font-medium text-sm" style={rsvpResponse === "not-attending" && brand?.secondaryColor ? { color: brand.secondaryColor } : undefined}>Not Attending</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{"Can't make it"}</p>
                 </button>
             </div>
@@ -503,12 +557,13 @@ function RSVPPage({
                             </label>
                             {field.type === "textarea" ? (
                                 <textarea
-                                    className="w-full px-3 py-2 bg-secondary rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    className="w-full px-3 py-2 rounded-xl text-sm resize-none focus:outline-none focus:ring-2"
+                                    style={getThemedCardStyle(brand, "primary")}
                                     rows={2}
                                     placeholder={`Enter ${field.label.toLowerCase()}...`}
                                 />
                             ) : field.type === "select" ? (
-                                <select className="w-full px-3 py-2 bg-secondary rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50">
+                                <select className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2" style={getThemedCardStyle(brand, "primary")}>
                                     <option value="">Select...</option>
                                     {field.options?.map((option) => (
                                         <option key={option} value={option}>{option}</option>
@@ -517,14 +572,15 @@ function RSVPPage({
                             ) : (
                                 <input
                                     type={field.type}
-                                    className="w-full px-3 py-2 bg-secondary rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                    className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2"
+                                    style={getThemedCardStyle(brand, "primary")}
                                     placeholder={`Enter ${field.label.toLowerCase()}...`}
                                 />
                             )}
                         </div>
                     ))}
 
-                    <Button className="w-full gradient-primary border-0 text-white py-5" disabled={isSubmitting} onClick={handleSubmit}>
+                    <Button className="w-full gradient-primary border-0 text-white py-5" onClick={() => setSubmitted(true)}>
                         Submit RSVP
                     </Button>
                 </div>
@@ -540,26 +596,23 @@ function RSVPPage({
                             placeholder="Sorry I can't make it..."
                         />
                     </div>
-                    {submitError && <p className="text-sm text-destructive">{submitError}</p>}
-                    <Button variant="outline" className="w-full py-5" disabled={isSubmitting} onClick={handleSubmit}>
+                    <Button variant="outline" className="w-full py-5" onClick={() => setSubmitted(true)}>
                         Send Response
                     </Button>
                 </div>
             )}
-
-            {submitError && rsvpResponse === "attending" && <p className="text-sm text-destructive">{submitError}</p>}
         </div>
     )
 }
 
-function LocationPage({ content }: { content: InvitationPageContent }) {
+function LocationPage({ content, brand }: { content: InvitationPageContent; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-5">
+        <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Location"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "Location"}</h2>
             </div>
 
-            <div className="aspect-[16/10] bg-secondary/50 rounded-xl overflow-hidden">
+            <div className="aspect-[16/10] rounded-xl overflow-hidden" style={getThemedCardStyle(brand, "primary")}>
                 <GoogleMap
                     address={content.address}
                     venue={content.venue}
@@ -569,7 +622,7 @@ function LocationPage({ content }: { content: InvitationPageContent }) {
 
             <div className="space-y-3">
                 {(content.venue || content.address) && (
-                    <div className="p-3 bg-secondary/50 rounded-xl">
+                    <div className="p-3 rounded-xl" style={getThemedCardStyle(brand, "secondary")}>
                         {content.venue && <h3 className="font-medium text-sm mb-0.5">{content.venue}</h3>}
                         {content.address && <p className="text-xs text-muted-foreground">{content.address}</p>}
                     </div>
@@ -590,21 +643,21 @@ function LocationPage({ content }: { content: InvitationPageContent }) {
     )
 }
 
-function SchedulePage({ content }: { content: InvitationPageContent }) {
+function SchedulePage({ content, brand }: { content: InvitationPageContent; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-5">
+        <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Schedule"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "Schedule"}</h2>
             </div>
 
             <div className="space-y-3">
                 {content.items?.map((item, index) => (
-                    <div key={index} className="flex gap-3 p-3 bg-secondary/50 rounded-xl relative">
+                    <div key={index} className="flex gap-3 p-3 rounded-xl relative" style={getThemedCardStyle(brand, "primary")}>
                         {index < (content.items?.length || 0) - 1 && (
                             <div className="absolute left-[1.85rem] top-14 bottom-0 w-px bg-border/50 -mb-3" />
                         )}
 
-                        <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0 relative z-10">
+                        <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center shrink-0 relative z-10" style={getThemedIconChipStyle(brand, "primary")}>
                             <Clock className="w-4 h-4 text-white" />
                         </div>
 
@@ -622,33 +675,47 @@ function SchedulePage({ content }: { content: InvitationPageContent }) {
     )
 }
 
-function GalleryPage({ content }: { content: InvitationPageContent }) {
+function GalleryPage({ content, brand }: { content: InvitationPageContent; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-5">
+        <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Gallery"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "Gallery"}</h2>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-                {(content.images || [1, 2, 3, 4]).map((_, index) => (
-                    <div key={index} className="aspect-square bg-secondary/50 rounded-lg flex items-center justify-center">
-                        <span className="text-muted-foreground/30 text-xs">Image {index + 1}</span>
-                    </div>
-                ))}
-            </div>
+            {content.images && content.images.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2">
+                    {content.images.map((imageSrc, index) => (
+                        <div key={`${index}-${imageSrc.slice(0, 16)}`} className="aspect-square overflow-hidden rounded-lg" style={getThemedCardStyle(brand, "secondary")}>
+                            <img
+                                src={imageSrc}
+                                alt={`Gallery image ${index + 1}`}
+                                className="h-full w-full object-cover"
+                            />
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-2">
+                    {[1, 2, 3, 4].map((item, index) => (
+                        <div key={item} className="aspect-square rounded-lg flex items-center justify-center" style={getThemedCardStyle(brand, "secondary")}>
+                            <span className="text-muted-foreground/30 text-xs">Image {index + 1}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }
 
-function RegistryPage({ content }: { content: InvitationPageContent }) {
+function RegistryPage({ content, brand }: { content: InvitationPageContent; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-5">
+        <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "Gift Registry"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "Gift Registry"}</h2>
                 {content.message && <p className="text-muted-foreground text-sm">{content.message}</p>}
             </div>
 
-            <div className="p-4 bg-secondary/50 rounded-xl text-center">
+            <div className="p-4 rounded-xl text-center" style={getThemedCardStyle(brand, "primary")}>
                 <p className="font-medium text-sm mb-2">{content.registryName || "Our Registry"}</p>
                 {content.registryUrl && (
                     <Button variant="outline" size="sm" asChild>
@@ -663,11 +730,11 @@ function RegistryPage({ content }: { content: InvitationPageContent }) {
     )
 }
 
-function FAQPage({ content }: { content: InvitationPageContent }) {
+function FAQPage({ content, brand }: { content: InvitationPageContent; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-5">
+        <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold">{content.headline || "FAQ"}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold" style={getHeadingStyle(brand)}>{content.headline || "FAQ"}</h2>
             </div>
 
             <div className="space-y-3">
@@ -675,7 +742,7 @@ function FAQPage({ content }: { content: InvitationPageContent }) {
                     { question: "What should I wear?", answer: "Smart casual attire is recommended." },
                     { question: "Is parking available?", answer: "Yes, free parking is available on site." },
                 ]).map((item, index) => (
-                    <div key={index} className="p-3 bg-secondary/50 rounded-xl">
+                    <div key={index} className="p-3 rounded-xl" style={getThemedCardStyle(brand, "secondary")}>
                         <p className="font-medium text-sm mb-1">{item.question}</p>
                         <p className="text-xs text-muted-foreground">{item.answer}</p>
                     </div>
@@ -685,11 +752,11 @@ function FAQPage({ content }: { content: InvitationPageContent }) {
     )
 }
 
-function GenericPage({ content, type }: { content: InvitationPageContent; type: string }) {
+function GenericPage({ content, type, brand }: { content: InvitationPageContent; type: string; brand?: BrandSettings | null }) {
     return (
-        <div className="p-6 md:p-8 space-y-5">
+        <div className="p-6 md:p-8 space-y-5" style={getBodyStyle(brand)}>
             <div className="text-center space-y-1">
-                <h2 className="text-xl md:text-2xl font-semibold capitalize">{content.headline || type}</h2>
+                <h2 className="text-xl md:text-2xl font-semibold capitalize" style={getHeadingStyle(brand)}>{content.headline || type}</h2>
                 {content.subheadline && <p className="text-muted-foreground text-sm">{content.subheadline}</p>}
             </div>
 

@@ -25,7 +25,7 @@ export function AuthLayout({
       <div className="w-full max-w-md">
         {/* Logo/Branding */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight mb-2">Eventora</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-2">Invyra</h1>
           <p className="text-muted-foreground">Create Invitations That Feel Alive</p>
         </div>
 

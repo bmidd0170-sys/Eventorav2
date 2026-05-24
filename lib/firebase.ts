@@ -22,7 +22,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Expose config in the browser for debugging and log it once
 if (typeof window !== 'undefined') {
   try {
-    ;(window as any).__FIREBASE_CONFIG = firebaseConfig
+    ; (window as any).__FIREBASE_CONFIG = firebaseConfig
     // eslint-disable-next-line no-console
     console.info('Resolved Firebase config:', firebaseConfig)
   } catch (e) {
@@ -33,7 +33,7 @@ if (typeof window !== 'undefined') {
 export const auth = getApps().length
   ? getAuth(app)
   : initializeAuth(app, {
-      persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-    });
+    persistence: [indexedDBLocalPersistence, browserLocalPersistence],
+  });
 export const db = getFirestore(app);
 export default app;

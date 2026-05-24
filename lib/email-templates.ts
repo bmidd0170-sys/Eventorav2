@@ -1,23 +1,23 @@
 type EmailTemplate = {
-  subject: string
-  text: string
-  html: string
+    subject: string
+    text: string
+    html: string
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;")
+    return value
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;")
 }
 
 function baseHtml(options: { eyebrow: string; headline: string; body: string; ctaLabel?: string; ctaUrl?: string }) {
-  const eyebrow = escapeHtml(options.eyebrow)
-  const headline = escapeHtml(options.headline)
+    const eyebrow = escapeHtml(options.eyebrow)
+    const headline = escapeHtml(options.headline)
 
-  return `
+    return `
     <div style="margin:0;padding:0;background:#0b1020;font-family:Arial,Helvetica,sans-serif;color:#e5e7eb;">
       <div style="max-width:640px;margin:0 auto;padding:32px 20px;">
         <div style="border:1px solid rgba(255,255,255,0.08);border-radius:24px;overflow:hidden;background:linear-gradient(180deg,#111827 0%,#0b1020 100%);box-shadow:0 20px 60px rgba(0,0,0,.35);">
@@ -38,190 +38,207 @@ function baseHtml(options: { eyebrow: string; headline: string; body: string; ct
 }
 
 export function buildWelcomeEmail(displayNameOrEmail: string): EmailTemplate {
-  const safeName = displayNameOrEmail.trim() || "there"
-  return {
-    subject: `Welcome to Eventora, ${safeName}!`,
-    text: `Welcome to Eventora, ${safeName}! We are glad you are here. Start by creating your first invitation and exploring the tutorial if you have not already finished it.`,
-    html: baseHtml({
-      eyebrow: "Welcome",
-      headline: `Welcome to Eventora, ${escapeHtml(safeName)}!`,
-      body: `<p>We are glad you joined Eventora.</p><p>Start by creating your first invitation, then walk through the tutorial to learn the builder, publish flow, and guest tools.</p>`,
-      ctaLabel: "Create your first event",
-      ctaUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/builder`,
-    }),
-  }
+    const safeName = displayNameOrEmail.trim() || "there"
+    return {
+        subject: `Welcome to Invyra, ${safeName}!`,
+        text: `Welcome to Invyra, ${safeName}! We are glad you are here. Start by creating your first invitation and exploring the tutorial if you have not already finished it.`,
+        html: baseHtml({
+            eyebrow: "Welcome",
+            headline: `Welcome to Invyra, ${escapeHtml(safeName)}!`,
+            body: `<p>We are glad you joined Invyra.</p><p>Start by creating your first invitation, then walk through the tutorial to learn the builder, publish flow, and guest tools.</p>`,
+            ctaLabel: "Create your first event",
+            ctaUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/builder`,
+        }),
+    }
 }
 
 export function buildTutorialCompleteEmail(displayNameOrEmail: string): EmailTemplate {
-  const safeName = displayNameOrEmail.trim() || "there"
-  return {
-    subject: `Tutorial complete - you are ready to build, ${safeName}`,
-    text: `Nice work, ${safeName}. You finished the Eventora tutorial and are ready to create invitations, publish events, and manage RSVPs.`,
-    html: baseHtml({
-      eyebrow: "Tutorial complete",
-      headline: `You finished the tutorial, ${escapeHtml(safeName)}`,
-      body: `<p>Nice work. You have finished the Eventora tutorial and are ready to build invitations, publish events, and manage RSVPs.</p>`,
-      ctaLabel: "Open your dashboard",
-      ctaUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`,
-    }),
-  }
+    const safeName = displayNameOrEmail.trim() || "there"
+    return {
+        subject: `Tutorial complete - you are ready to build, ${safeName}`,
+        text: `Nice work, ${safeName}. You finished the Invyra tutorial and are ready to create invitations, publish events, and manage RSVPs.`,
+        html: baseHtml({
+            eyebrow: "Tutorial complete",
+            headline: `You finished the tutorial, ${escapeHtml(safeName)}`,
+            body: `<p>Nice work. You have finished the Invyra tutorial and are ready to build invitations, publish events, and manage RSVPs.</p>`,
+            ctaLabel: "Open your dashboard",
+            ctaUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard`,
+        }),
+    }
 }
 
 export function buildRsvpUpdateEmail(options: {
-  eventTitle: string
-  responseLabel: string
-  guestEmail: string
-  guestName?: string | null
-  eventUrl?: string
+    eventTitle: string
+    responseLabel: string
+    guestEmail: string
+    guestName?: string | null
+    eventUrl?: string
 }): EmailTemplate {
-  const guestLabel = options.guestName?.trim() || options.guestEmail
-  return {
-    subject: `${guestLabel} RSVP'd ${options.responseLabel.toLowerCase()} for ${options.eventTitle}`,
-    text: `${guestLabel} responded ${options.responseLabel.toLowerCase()} to ${options.eventTitle}.`,
-    html: baseHtml({
-      eyebrow: "RSVP update",
-      headline: `${escapeHtml(guestLabel)} RSVP'd ${escapeHtml(options.responseLabel.toLowerCase())}`,
-      body: `<p><strong>${escapeHtml(guestLabel)}</strong> responded <strong>${escapeHtml(options.responseLabel.toLowerCase())}</strong> to <strong>${escapeHtml(options.eventTitle)}</strong>.</p><p>Email: ${escapeHtml(options.guestEmail)}</p>`,
-      ctaLabel: options.eventUrl ? "View event" : undefined,
-      ctaUrl: options.eventUrl,
-    }),
-  }
+    const guestLabel = options.guestName?.trim() || options.guestEmail
+    return {
+        subject: `${guestLabel} RSVP'd ${options.responseLabel.toLowerCase()} for ${options.eventTitle}`,
+        text: `${guestLabel} responded ${options.responseLabel.toLowerCase()} to ${options.eventTitle}.`,
+        html: baseHtml({
+            eyebrow: "RSVP update",
+            headline: `${escapeHtml(guestLabel)} RSVP'd ${escapeHtml(options.responseLabel.toLowerCase())}`,
+            body: `<p><strong>${escapeHtml(guestLabel)}</strong> responded <strong>${escapeHtml(options.responseLabel.toLowerCase())}</strong> to <strong>${escapeHtml(options.eventTitle)}</strong>.</p><p>Email: ${escapeHtml(options.guestEmail)}</p>`,
+            ctaLabel: options.eventUrl ? "View event" : undefined,
+            ctaUrl: options.eventUrl,
+        }),
+    }
 }
 
 export function buildRsvpConfirmationEmail(options: {
-  eventTitle: string
-  responseLabel: string
-  guestEmail: string
-  guestName?: string | null
-  eventUrl?: string
+    eventTitle: string
+    responseLabel: string
+    guestEmail: string
+    guestName?: string | null
+    eventUrl?: string
 }): EmailTemplate {
-  const guestLabel = options.guestName?.trim() || options.guestEmail
-  return {
-    subject: `Your RSVP for ${options.eventTitle} was received`,
-    text: `Thanks ${guestLabel}. Your ${options.responseLabel.toLowerCase()} RSVP for ${options.eventTitle} was received.`,
-    html: baseHtml({
-      eyebrow: "RSVP received",
-      headline: `Thanks ${escapeHtml(guestLabel)}`,
-      body: `<p>Your <strong>${escapeHtml(options.responseLabel.toLowerCase())}</strong> RSVP for <strong>${escapeHtml(options.eventTitle)}</strong> has been received.</p>`,
-      ctaLabel: options.eventUrl ? "View invitation" : undefined,
-      ctaUrl: options.eventUrl,
-    }),
-  }
+    const guestLabel = options.guestName?.trim() || options.guestEmail
+    return {
+        subject: `Your RSVP for ${options.eventTitle} was received`,
+        text: `Thanks ${guestLabel}. Your ${options.responseLabel.toLowerCase()} RSVP for ${options.eventTitle} was received.`,
+        html: baseHtml({
+            eyebrow: "RSVP received",
+            headline: `Thanks ${escapeHtml(guestLabel)}`,
+            body: `<p>Your <strong>${escapeHtml(options.responseLabel.toLowerCase())}</strong> RSVP for <strong>${escapeHtml(options.eventTitle)}</strong> has been received.</p>`,
+            ctaLabel: options.eventUrl ? "View invitation" : undefined,
+            ctaUrl: options.eventUrl,
+        }),
+    }
 }
 
 export function buildConnectionRequestOutgoingEmail(options: {
-  fromName: string
-  fromEmail: string
-  toName?: string | null
+    fromName: string
+    fromEmail: string
+    toName?: string | null
 }): EmailTemplate {
-  const recipient = options.toName?.trim() || "your connection"
-  return {
-    subject: `Connection request sent to ${recipient}`,
-    text: `Your connection request to ${recipient} is pending on Eventora. We will let you know when it is accepted.`,
-    html: baseHtml({
-      eyebrow: "Connection request",
-      headline: `Request sent to ${escapeHtml(recipient)}`,
-      body: `<p>Your connection request from <strong>${escapeHtml(options.fromName)}</strong> (${escapeHtml(options.fromEmail)}) is now pending.</p><p>We will notify you when it is accepted.</p>`,
-    }),
-  }
+    const recipient = options.toName?.trim() || "your connection"
+    return {
+        subject: `Connection request sent to ${recipient}`,
+        text: `Your connection request to ${recipient} is pending on Invyra. We will let you know when it is accepted.`,
+        html: baseHtml({
+            eyebrow: "Connection request",
+            headline: `Request sent to ${escapeHtml(recipient)}`,
+            body: `<p>Your connection request from <strong>${escapeHtml(options.fromName)}</strong> (${escapeHtml(options.fromEmail)}) is now pending.</p><p>We will notify you when it is accepted.</p>`,
+        }),
+    }
 }
 
 export function buildConnectionRequestIncomingEmail(options: {
-  fromName: string
-  fromEmail: string
-  toName?: string | null
+    fromName: string
+    fromEmail: string
+    toName?: string | null
 }): EmailTemplate {
-  const recipient = options.toName?.trim() || "there"
-  return {
-    subject: `${options.fromName} sent you a connection request`,
-    text: `${options.fromName} (${options.fromEmail}) wants to connect with you on Eventora.`,
-    html: baseHtml({
-      eyebrow: "New request",
-      headline: `${escapeHtml(options.fromName)} wants to connect`,
-      body: `<p>Hi ${escapeHtml(recipient)},</p><p><strong>${escapeHtml(options.fromName)}</strong> (${escapeHtml(options.fromEmail)}) sent you a connection request on Eventora.</p>`,
-    }),
-  }
+    const recipient = options.toName?.trim() || "there"
+    return {
+        subject: `${options.fromName} sent you a connection request`,
+        text: `${options.fromName} (${options.fromEmail}) wants to connect with you on Invyra.`,
+        html: baseHtml({
+            eyebrow: "New request",
+            headline: `${escapeHtml(options.fromName)} wants to connect`,
+            body: `<p>Hi ${escapeHtml(recipient)},</p><p><strong>${escapeHtml(options.fromName)}</strong> (${escapeHtml(options.fromEmail)}) sent you a connection request on Invyra.</p>`,
+        }),
+    }
 }
 
 export function buildConnectionRequestAcceptedEmail(options: {
-  senderName: string
-  senderEmail: string
-  recipientName: string
-  recipientEmail: string
-  viewer: "sender" | "recipient"
+    senderName: string
+    senderEmail: string
+    recipientName: string
+    recipientEmail: string
+    viewer: "sender" | "recipient"
 }): EmailTemplate {
-  const otherPerson = options.viewer === "sender" ? options.recipientName : options.senderName
-  return {
-    subject: options.viewer === "sender"
-      ? `${options.recipientName} accepted your connection request`
-      : `You accepted ${options.senderName}'s connection request`,
-    text: options.viewer === "sender"
-      ? `${options.recipientName} accepted your connection request on Eventora.`
-      : `You accepted ${options.senderName}'s connection request on Eventora.`,
-    html: baseHtml({
-      eyebrow: "Connection accepted",
-      headline: options.viewer === "sender"
-        ? `${escapeHtml(options.recipientName)} accepted your request`
-        : `You are now connected with ${escapeHtml(otherPerson)}`,
-      body: options.viewer === "sender"
-        ? `<p><strong>${escapeHtml(options.recipientName)}</strong> accepted your connection request on Eventora.</p>`
-        : `<p>You accepted <strong>${escapeHtml(options.senderName)}</strong>'s connection request on Eventora.</p>`,
-    }),
-  }
+    const otherPerson = options.viewer === "sender" ? options.recipientName : options.senderName
+    return {
+        subject: options.viewer === "sender"
+            ? `${options.recipientName} accepted your connection request`
+            : `You accepted ${options.senderName}'s connection request`,
+        text: options.viewer === "sender"
+            ? `${options.recipientName} accepted your connection request on Invyra.`
+            : `You accepted ${options.senderName}'s connection request on Invyra.`,
+        html: baseHtml({
+            eyebrow: "Connection accepted",
+            headline: options.viewer === "sender"
+                ? `${escapeHtml(options.recipientName)} accepted your request`
+                : `You are now connected with ${escapeHtml(otherPerson)}`,
+            body: options.viewer === "sender"
+                ? `<p><strong>${escapeHtml(options.recipientName)}</strong> accepted your connection request on Invyra.</p>`
+                : `<p>You accepted <strong>${escapeHtml(options.senderName)}</strong>'s connection request on Invyra.</p>`,
+        }),
+    }
 }
 
 export function buildEventReminderEmail(options: {
-  eventTitle: string
-  eventDateLabel: string
-  eventTimeLabel: string
-  eventUrl?: string
+    eventTitle: string
+    eventDateLabel: string
+    eventTimeLabel: string
+    eventUrl?: string
 }): EmailTemplate {
-  return {
-    subject: `Reminder: ${options.eventTitle} is coming up soon`,
-    text: `${options.eventTitle} is coming up on ${options.eventDateLabel} at ${options.eventTimeLabel}.`,
-    html: baseHtml({
-      eyebrow: "Event reminder",
-      headline: `${escapeHtml(options.eventTitle)} is coming up soon`,
-      body: `<p>Your event is scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Use this reminder to follow up with guests or finish your final checks.</p>`,
-      ctaLabel: options.eventUrl ? "Open event" : undefined,
-      ctaUrl: options.eventUrl,
-    }),
-  }
+    return {
+        subject: `Reminder: ${options.eventTitle} is coming up soon`,
+        text: `${options.eventTitle} is coming up on ${options.eventDateLabel} at ${options.eventTimeLabel}.`,
+        html: baseHtml({
+            eyebrow: "Event reminder",
+            headline: `${escapeHtml(options.eventTitle)} is coming up soon`,
+            body: `<p>Your event is scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Use this reminder to follow up with guests or finish your final checks.</p>`,
+            ctaLabel: options.eventUrl ? "Open event" : undefined,
+            ctaUrl: options.eventUrl,
+        }),
+    }
 }
 
 export function buildEventCancelledEmail(options: {
-  eventTitle: string
-  eventDateLabel: string
-  eventTimeLabel: string
-  eventUrl?: string
+    eventTitle: string
+    eventDateLabel: string
+    eventTimeLabel: string
+    eventUrl?: string
 }): EmailTemplate {
-  return {
-    subject: `${options.eventTitle} has been canceled`,
-    text: `${options.eventTitle} scheduled for ${options.eventDateLabel} at ${options.eventTimeLabel} has been canceled.`,
-    html: baseHtml({
-      eyebrow: "Event canceled",
-      headline: `${escapeHtml(options.eventTitle)} has been canceled`,
-      body: `<p>The event scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong> is no longer happening.</p><p>We will keep the invitation record closed out on Eventora.</p>`,
-      ctaLabel: options.eventUrl ? "Review event" : undefined,
-      ctaUrl: options.eventUrl,
-    }),
-  }
+    return {
+        subject: `${options.eventTitle} has been canceled`,
+        text: `${options.eventTitle} scheduled for ${options.eventDateLabel} at ${options.eventTimeLabel} has been canceled.`,
+        html: baseHtml({
+            eyebrow: "Event canceled",
+            headline: `${escapeHtml(options.eventTitle)} has been canceled`,
+            body: `<p>The event scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong> is no longer happening.</p><p>We will keep the invitation record closed out on Invyra.</p>`,
+            ctaLabel: options.eventUrl ? "Review event" : undefined,
+            ctaUrl: options.eventUrl,
+        }),
+    }
+}
+
+export function buildEventUnpublishedEmail(options: {
+    eventTitle: string
+    eventUrl?: string
+}) {
+    return {
+        subject: `${options.eventTitle} is no longer published`,
+        text: `${options.eventTitle} has been unpublished and is no longer live.`,
+        html: baseHtml({
+            eyebrow: "Event update",
+            headline: `${escapeHtml(options.eventTitle)} is no longer live`,
+            body: `<p>The event has been unpublished and is no longer available to new guests.</p><p>You can check back later if it is republished.</p>`,
+            ctaLabel: options.eventUrl ? "Open dashboard" : undefined,
+            ctaUrl: options.eventUrl,
+        }),
+    }
 }
 
 export function buildAppUpdateEmail(options: {
-  headline: string
-  summary: string
-  eventUrl?: string
+    headline: string
+    summary: string
+    eventUrl?: string
 }): EmailTemplate {
-  return {
-    subject: options.headline,
-    text: options.summary,
-    html: baseHtml({
-      eyebrow: "Product update",
-      headline: options.headline,
-      body: `<p>${escapeHtml(options.summary)}</p>`,
-      ctaLabel: options.eventUrl ? "See what changed" : undefined,
-      ctaUrl: options.eventUrl,
-    }),
-  }
+    return {
+        subject: options.headline,
+        text: options.summary,
+        html: baseHtml({
+            eyebrow: "Product update",
+            headline: options.headline,
+            body: `<p>${escapeHtml(options.summary)}</p>`,
+            ctaLabel: options.eventUrl ? "See what changed" : undefined,
+            ctaUrl: options.eventUrl,
+        }),
+    }
 }

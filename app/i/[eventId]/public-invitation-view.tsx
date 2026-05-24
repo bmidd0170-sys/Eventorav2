@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { InvitationPageRenderer } from "@/components/invitation/invitation-page-renderer"
+import { InvitationPageRenderer, getInvitationBrandStyles } from "@/components/invitation/invitation-page-renderer"
+import type { BrandSettings } from "@/lib/branding"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 type InvitationPage = {
@@ -15,10 +16,12 @@ export function PublicInvitationView({
   eventId,
   title,
   pages,
+  brand,
 }: {
   eventId: string
   title: string
   pages: InvitationPage[]
+  brand?: BrandSettings | null
 }) {
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [rsvpResponse, setRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
@@ -35,19 +38,20 @@ export function PublicInvitationView({
   }, [currentPage?.type])
 
   return (
-    <div className="min-h-screen bg-background py-8 px-4 sm:px-6">
+    <div className="min-h-screen bg-background py-8 px-4 sm:px-6" style={getInvitationBrandStyles(brand)}>
       <div className="mx-auto max-w-3xl">
         <div className="mb-6 text-center">
           <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
           <p className="text-sm text-muted-foreground mt-2">You are viewing a shared invitation.</p>
         </div>
 
-        <div className="rounded-2xl border border-border/60 bg-card shadow-xl overflow-hidden">
+        <div className="rounded-2xl border border-border/60 bg-card shadow-xl overflow-hidden" style={getInvitationBrandStyles(brand)}>
           <InvitationPageRenderer
             eventId={eventId}
             page={currentPage}
             rsvpResponse={rsvpResponse}
             setRsvpResponse={setRsvpResponse}
+            brand={brand}
           />
         </div>
 

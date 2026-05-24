@@ -29,7 +29,7 @@ export function AppNavigation() {
             <div className="w-7 h-7 rounded-lg gradient-primary flex items-center justify-center">
               <Sparkles className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-semibold tracking-tight">Eventora</span>
+            <span className="font-semibold tracking-tight">Invyra</span>
           </Link>
 
           {/* Center navigation */}

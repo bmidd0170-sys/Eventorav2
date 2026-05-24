@@ -6,16 +6,15 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
-import { signInWithEmailAndPassword, GoogleAuthProvider, getRedirectResult, signInWithRedirect, onAuthStateChanged } from 'firebase/auth'
+import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
+import { requestGoogleAccessToken } from '@/lib/google-auth'
 
 export default function SignInPage() {
   const router = useRouter()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [isCheckingRedirect, setIsCheckingRedirect] = useState(true)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -24,32 +23,10 @@ export default function SignInPage() {
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
-      if (user && !isCheckingRedirect) {
+      if (user) {
         window.location.replace('/home')
       }
     })
-  }, [router, isCheckingRedirect])
-
-  useEffect(() => {
-    let isActive = true
-
-    async function handleRedirectResult() {
-      try {
-        const userCredential = await getRedirectResult(auth)
-        if (!isActive || !userCredential?.user) return
-        window.location.replace('/home')
-      } catch (err: any) {
-        alert(err?.message || 'Google sign-in failed')
-      } finally {
-        if (isActive) setIsCheckingRedirect(false)
-      }
-    }
-
-    void handleRedirectResult()
-
-    return () => {
-      isActive = false
-    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,8 +45,10 @@ export default function SignInPage() {
 
   async function handleGoogleSignIn() {
     try {
-      const provider = new GoogleAuthProvider()
-      await signInWithRedirect(auth, provider)
+      const accessToken = await requestGoogleAccessToken()
+      const credential = GoogleAuthProvider.credential(undefined, accessToken)
+      await signInWithCredential(auth, credential)
+      window.location.replace('/home')
     } catch (err: any) {
       alert(err?.message || 'Google sign-in failed')
     }
@@ -91,7 +70,7 @@ export default function SignInPage() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-semibold font-sans">Eventora</span>
+            <span className="text-2xl font-semibold font-sans">Invyra</span>
           </Link>
 
           <h1 className="text-4xl xl:text-5xl font-bold leading-tight mb-6">
@@ -127,7 +106,7 @@ export default function SignInPage() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className="text-2xl font-semibold">Eventora</span>
+            <span className="text-2xl font-semibold">Invyra</span>
           </Link>
 
           <div className="mb-8">
@@ -142,7 +121,12 @@ export default function SignInPage() {
 
           {/* Social sign in */}
           <div className="space-y-3 mb-6">
-            <Button variant="outline" className="w-full h-12 text-base" type="button" onClick={handleGoogleSignIn}>
+            <Button
+              variant="outline"
+              className="w-full h-12 text-base"
+              type="button"
+              onClick={handleGoogleSignIn}
+            >
               <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
                 <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
@@ -210,10 +194,12 @@ export default function SignInPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Checkbox
+              <input
                 id="remember"
+                type="checkbox"
                 checked={formData.rememberMe}
-                onCheckedChange={(checked) => setFormData({ ...formData, rememberMe: checked as boolean })}
+                onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
+                className="h-4 w-4 rounded border border-input bg-background"
               />
               <Label htmlFor="remember" className="text-sm font-normal cursor-pointer">
                 Remember me for 30 days

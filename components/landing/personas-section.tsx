@@ -44,8 +44,8 @@ export function PersonasSection() {
             <span className="gradient-text">Occasion</span>
           </h2>
           <p className="text-muted-foreground leading-relaxed">
-            Whether you&apos;re planning an intimate gathering or a grand celebration, 
-            Eventora adapts to your needs.
+            Whether you&apos;re planning an intimate gathering or a grand celebration,
+            Invyra adapts to your needs.
           </p>
         </div>
 
@@ -82,17 +82,17 @@ function PersonaCard({
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-smooth">
         <div className={`absolute inset-0 ${bgColor} opacity-20`} />
       </div>
-      
+
       <div className="relative space-y-6">
         <div className={`w-12 h-12 rounded-xl ${bgColor} flex items-center justify-center`}>
           <Icon className={`w-6 h-6 ${color}`} />
         </div>
-        
+
         <div>
           <h3 className="text-xl font-medium mb-2">{title}</h3>
           <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
         </div>
-        
+
         <Button variant="ghost" className="group/btn p-0 h-auto text-sm" asChild>
           <Link href={href}>
             {cta}

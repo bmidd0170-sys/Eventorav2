@@ -8,6 +8,7 @@ import { defaultInvitationId, getInvitationById } from "@/lib/invitations"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 import { getUserBranding, applyBrandSettingsToPages } from "@/lib/branding"
+import { getInvitationBrandStyles } from "@/components/invitation/invitation-page-renderer"
 import {
   Sparkles,
   Send,
@@ -110,6 +111,12 @@ type Message = {
   content: string
   timestamp: Date
   images?: string[]
+}
+
+type StoredDraftImage = {
+  name: string
+  type: string
+  data: string
 }
 
 type Version = {
@@ -660,7 +667,6 @@ export default function EditorPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const initialPrompt = searchParams.get("prompt") || ""
-  const isDemoMode = searchParams.get("demo") === "1"
   const starterTemplate = getStarterTemplateFromPrompt(initialPrompt)
   const eventParam = searchParams.get("event")
   const projectParam = searchParams.get("project")
@@ -685,21 +691,42 @@ export default function EditorPage() {
   const [activePage, setActivePage] = useState<string>("cover")
   const [eventTitle, setEventTitle] = useState<string>(starterTemplate?.title ?? currentInvitation.title)
   const [versions, setVersions] = useState<Version[]>([
-    { id: "v1", label: "v1", timestamp: new Date(), pages: clonePages(starterPages) }
+    { id: "v1", label: "v1", timestamp: new Date(), pages: starterPages }
   ])
   const [activeVersion, setActiveVersion] = useState("v1")
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
   const [showPagePanel, setShowPagePanel] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [attachedImages, setAttachedImages] = useState<Array<{name: string, preview: string}>>([])
+  const [attachedImages, setAttachedImages] = useState<Array<{ name: string, preview: string }>>([])
   const [isDraggingImages, setIsDraggingImages] = useState(false)
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle")
+  const [eventStatus, setEventStatus] = useState<"draft" | "published" | "completed" | "cancelled">("draft")
   const [authToken, setAuthToken] = useState<string | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [isLoadingDraft, setIsLoadingDraft] = useState(true)
+  const [isDraftImagesLoaded, setIsDraftImagesLoaded] = useState(false)
   const [brandSettings, setBrandSettings] = useState<any>(null)
   const brandAppliedRef = useRef(false)
   const initialPromptSentRef = useRef(false)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
+  const dragDepthRef = useRef(0)
+
+  const toAiImages = (images: Array<{ name: string; preview: string }>) => {
+    return images
+      .map((image) => {
+        const match = image.preview.match(/^data:([^;]+);base64,(.*)$/)
+        if (!match) {
+          return null
+        }
+
+        return {
+          name: image.name,
+          type: match[1],
+          data: match[2],
+        }
+      })
+      .filter((image): image is StoredDraftImage => image !== null)
+  }
 
   useEffect(() => {
     if (eventParam?.trim() || projectParam?.trim() || draftIdAppliedRef.current) return
@@ -710,6 +737,40 @@ export default function EditorPage() {
     router.replace(`/editor?${nextParams.toString()}`)
   }, [currentEventId, eventParam, projectParam, router, searchParams])
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
+    }
+
+    const draftKey = eventParam?.trim() || currentEventId
+    const storedImages = draftKey ? sessionStorage.getItem(`invyra-draft-images:${draftKey}`) : null
+
+    if (!storedImages) {
+      setIsDraftImagesLoaded(true)
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(storedImages) as StoredDraftImage[]
+      const nextImages = parsed
+        .filter((image) => image?.data)
+        .map((image) => ({
+          name: image.name,
+          preview: image.data,
+        }))
+
+      if (nextImages.length > 0) {
+        setAttachedImages((prev) => (prev.length > 0 ? prev : nextImages))
+      }
+
+      sessionStorage.removeItem(`invyra-draft-images:${draftKey}`)
+    } catch (error) {
+      console.error("Failed to load draft images:", error)
+    } finally {
+      setIsDraftImagesLoaded(true)
+    }
+  }, [currentEventId, eventParam])
+
   // Initialize with prompt if provided
   useEffect(() => {
     if (initialPrompt) {
@@ -717,12 +778,8 @@ export default function EditorPage() {
         id: "welcome",
         role: "assistant",
         content: starterTemplate
-          ? isDemoMode
-            ? `Demo mode is on. I'm ${assistantName}, and I’ve preloaded a mock response flow for "${starterTemplate.title}" so you can see how the editor reacts without calling the AI.`
-            : `I'm ${assistantName}. I already set up a tailored multi-page starter for "${starterTemplate.title}" with prefilled sections. Tell me what you'd like to refine first.`
-          : isDemoMode
-            ? `Demo mode is on. I'm ${assistantName}, and I’ll show you mock AI reactions for "${initialPrompt}" without sending anything to the AI service.`
-            : `I'm ${assistantName}. I'll help you shape "${initialPrompt}" into something more intentional. I started with a multi-page invitation, and we can make the cover, details, and RSVP feel more alive from here.`,
+          ? `I'm ${assistantName}. I already set up a tailored multi-page starter for "${starterTemplate.title}" with prefilled sections. Tell me what you'd like to refine first.`
+          : `I'm ${assistantName}. I'll help you shape "${initialPrompt}" into something more intentional. I started with a multi-page invitation, and we can make the cover, details, and RSVP feel more alive from here.`,
         timestamp: new Date()
       }
       setMessages([welcomeMessage])
@@ -730,14 +787,12 @@ export default function EditorPage() {
       const welcomeMessage: Message = {
         id: "welcome",
         role: "assistant",
-        content: isDemoMode
-          ? `Demo mode is on. I'm ${assistantName}, and I’ll respond with canned AI reactions so you can explore the editor safely.`
-          : `I'm ${assistantName}, your creative design partner. Let's make this feel more alive - you can describe changes, ask for a new page, or push the visual rhythm in a bolder direction.`,
+        content: `I'm ${assistantName}, your creative design partner. Let's make this feel more alive - you can describe changes, ask for a new page, or push the visual rhythm in a bolder direction.`,
         timestamp: new Date()
       }
       setMessages([welcomeMessage])
     }
-  }, [assistantName, initialPrompt, starterTemplate, isDemoMode])
+  }, [assistantName, initialPrompt, starterTemplate])
 
   // Set up auth token and load draft
   useEffect(() => {
@@ -748,12 +803,6 @@ export default function EditorPage() {
           setAuthToken(token)
           setUserId(user.uid)
 
-          if (isDemoMode) {
-            // Demo mode stays client-local: no draft load/save/publish calls.
-            setIsLoadingDraft(false)
-            return
-          }
-          
           // Try to load draft from database
           const response = await fetch("/api/editor/load", {
             method: "POST",
@@ -761,7 +810,7 @@ export default function EditorPage() {
               "Content-Type": "application/json",
               "Authorization": `Bearer ${token}`
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               eventId: currentEventId,
               userId: user.uid
             })
@@ -769,6 +818,9 @@ export default function EditorPage() {
 
           if (response.ok) {
             const data = await response.json()
+            if (typeof data.event.status === "string") {
+              setEventStatus(data.event.status)
+            }
             // set title if present
             if (data.event.title && typeof data.event.title === "string") {
               setEventTitle(data.event.title)
@@ -819,7 +871,7 @@ export default function EditorPage() {
     })
 
     return () => unsubscribe()
-  }, [currentEventId, isDemoMode])
+  }, [currentEventId])
 
   // Load brand settings when user ID is available
   useEffect(() => {
@@ -844,18 +896,18 @@ export default function EditorPage() {
 
     // Check if this is a new invitation (not loaded from database)
     // If pages were loaded from database, don't override with brand settings
-    const isLoadedFromDatabase = pages.length > 0 && 
-      pages.some(p => p.content?.headline && p.content.headline !== "You're Invited" && 
-                       p.content.headline !== "Together With Their Families" &&
-                       p.content.headline !== "You're Invited to a Birthday Bash")
+    const isLoadedFromDatabase = pages.length > 0 &&
+      pages.some(p => p.content?.headline && p.content.headline !== "You're Invited" &&
+        p.content.headline !== "Together With Their Families" &&
+        p.content.headline !== "You're Invited to a Birthday Bash")
 
     if (!isLoadedFromDatabase && Object.keys(brandSettings).length > 0) {
       brandAppliedRef.current = true
       const brandedPages = applyBrandSettingsToPages(pages, brandSettings)
       setPages(brandedPages)
-      
+
       // Also update the version history
-      setVersions(prevVersions => 
+      setVersions(prevVersions =>
         prevVersions.map(v => ({
           ...v,
           pages: v.pages === pages ? brandedPages : v.pages
@@ -867,91 +919,119 @@ export default function EditorPage() {
   // Send initial prompt to AI if provided and not yet sent (only after draft loading completes)
   useEffect(() => {
     // Early exit if conditions aren't met
-        // Only proceed if we have everything we need
-        if (!initialPrompt) {
-          return
-        }
-        
-        if (initialPromptSentRef.current) {
-          return
-        }
-        
-        // Wait for draft to finish loading before checking messages
-        if (isLoadingDraft) {
-          return
-        }
-        
-        // Auth must be ready
-        if (!authToken) {
+    // Only proceed if we have everything we need
+    if (!initialPrompt) {
       return
     }
-    
+
+    if (initialPromptSentRef.current) {
+      return
+    }
+
+    // Wait for draft to finish loading before checking messages
+    if (isLoadingDraft) {
+      return
+    }
+
+    if (!isDraftImagesLoaded) {
+      return
+    }
+
+    // Auth must be ready
+    if (!authToken) {
+      return
+    }
+
     // Check if the initial prompt was already sent in a previous session
-        // Check if the initial prompt was already sent in a previous session
-        // by looking for a message with the exact same content
-        const hasInitialPrompt = messages.some(
-          msg => msg.role === "user" && msg.content === initialPrompt
-        )
-        
-    if (hasInitialPrompt) {
-          // Prompt was already sent, don't send again
+    // Check if the initial prompt was already sent in a previous session
+    // by looking for a message with the exact same content
+    const initialPromptSentKey = `invyra-initial-prompt-sent:${currentEventId}`
+    const initialPromptAlreadySent = typeof window !== "undefined"
+      && sessionStorage.getItem(initialPromptSentKey) === "true"
+
+    if (initialPromptAlreadySent) {
       initialPromptSentRef.current = true
       return
     }
-    
-        // All clear, mark as sent and prepare to send
+
+    const hasInitialPrompt = messages.some(
+      msg => msg.role === "user" && msg.content === initialPrompt
+    )
+
+    if (hasInitialPrompt) {
+      // Prompt was already sent, don't send again
+      initialPromptSentRef.current = true
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(initialPromptSentKey, "true")
+      }
+      return
+    }
+
+    // All clear, mark as sent and prepare to send
     initialPromptSentRef.current = true
-    
+
     const sendInitialPrompt = async () => {
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem(initialPromptSentKey, "true")
+      }
+
+      const imageDataUrls = attachedImages.map((image) => image.preview)
       const userMessage: Message = {
         id: Date.now().toString(),
         role: "user",
         content: initialPrompt,
+        images: imageDataUrls.length > 0 ? imageDataUrls : undefined,
         timestamp: new Date()
       }
-      
+
       // Use current state from closure at time of effect execution
       const conversation = [...messages, userMessage]
       setMessages(conversation)
       setIsTyping(true)
 
+      let nextPages = pages
+      let nextActivePage = activePage
+      let didMutate = false
+
+      const imageInsertion = attachImagesToInvitation(nextPages, imageDataUrls)
+      if (imageInsertion.didMutate) {
+        nextPages = imageInsertion.pages
+        nextActivePage = imageInsertion.activePageId ?? nextActivePage
+        didMutate = true
+      }
+
       try {
-        const data = isDemoMode
-          ? getDemoAiResponse(initialPrompt, activePage)
-          : await (async () => {
-              const response = await fetch("/api/editor/ai", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  prompt: initialPrompt,
-                  invitation: {
-                    id: currentEventId,
-                    title: currentInvitation.title,
-                    description: currentInvitation.description,
-                  },
-                  activePage,
-                  pages: pages.map(({ id, name, content }) => ({ id, name, content })),
-                  recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
-                }),
-              })
+        const response = await fetch("/api/editor/ai", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            prompt: initialPrompt,
+            invitation: {
+              id: currentEventId,
+              title: currentInvitation.title,
+              description: currentInvitation.description,
+            },
+            activePage: nextActivePage,
+            pages: nextPages.map(({ id, name, content }) => ({ id, name, content })),
+            images: imageDataUrls.length > 0 ? toAiImages(attachedImages) : undefined,
+            recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
+          }),
+        })
 
-              if (response.status === 204) {
-                return null
-              }
+        if (!response.ok && response.status !== 204) {
+          throw new Error("AI request failed")
+        }
 
-              if (!response.ok) {
-                throw new Error("AI request failed")
-              }
-
-              return (await response.json()) as AiEditorResponse
-            })()
-
-        if (!data) {
+        if (response.status === 204) {
+          const fallback = generateFallbackAIResponse(initialPrompt)
+          setMessages(prev => [...prev, fallback])
           return
         }
 
+        const data = (await response.json()) as AiEditorResponse
         const reply = data.reply?.trim() || "I took a pass at that and shaped the invitation with a clearer visual rhythm."
         const assistantMessage: Message = {
           id: Date.now().toString(),
@@ -960,29 +1040,29 @@ export default function EditorPage() {
           timestamp: new Date(),
         }
 
-        let nextPages = pages
-        let nextActivePage = activePage
-        let didMutate = false
+        let responsePages = nextPages
+        let responseActivePage = nextActivePage
+        let responseDidMutate = didMutate
 
         if (data.actions?.length) {
-          const applied = applyAiActions(data.actions, pages)
-          nextPages = applied.pages
-          nextActivePage = applied.activePageId ?? activePage
-          didMutate = applied.didMutate
+          const applied = applyAiActions(data.actions, nextPages)
+          responsePages = applied.pages
+          responseActivePage = applied.activePageId ?? nextActivePage
+          responseDidMutate = applied.didMutate || responseDidMutate
         }
 
         setMessages(prev => [...prev, assistantMessage])
 
-        if (didMutate) {
-          setPages(nextPages)
-          setActivePage(nextActivePage)
+        if (responseDidMutate) {
+          setPages(responsePages)
+          setActivePage(responseActivePage)
 
           const nextVersionId = `v${versions.length + 1}`
           const newVersion: Version = {
             id: nextVersionId,
             label: nextVersionId,
             timestamp: new Date(),
-            pages: nextPages,
+            pages: responsePages,
           }
           setVersions(prev => [...prev, newVersion])
           setActiveVersion(nextVersionId)
@@ -992,12 +1072,13 @@ export default function EditorPage() {
         const response = generateFallbackAIResponse(initialPrompt)
         setMessages(prev => [...prev, response])
       } finally {
+        setAttachedImages([])
         setIsTyping(false)
       }
     }
 
     sendInitialPrompt()
-  }, [initialPrompt, isLoadingDraft, authToken, messages])
+  }, [attachedImages, initialPrompt, isDraftImagesLoaded, isLoadingDraft, authToken, messages])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -1010,39 +1091,139 @@ export default function EditorPage() {
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     e.stopPropagation()
+    dragDepthRef.current = 0
     setIsDraggingImages(false)
-    
-    const files = Array.from(e.dataTransfer.files)
-    const imageFiles = files.filter(f => f.type.startsWith('image/'))
-    
-    imageFiles.forEach(file => {
+
+    handleComposerFiles(e.dataTransfer.files)
+  }
+
+  const removeImage = (index: number) => {
+    setAttachedImages(prev => {
+      return prev.filter((_, i) => i !== index)
+    })
+  }
+
+  const attachImagesToInvitation = (currentPages: InvitePage[], imageDataUrls: string[]) => {
+    if (imageDataUrls.length === 0) {
+      return {
+        pages: currentPages,
+        activePageId: undefined as string | undefined,
+        didMutate: false,
+      }
+    }
+
+    const nextPages = [...currentPages]
+    const galleryIndex = nextPages.findIndex((page) => page.id === "gallery" || page.id.startsWith("gallery-"))
+    const currentGallery = galleryIndex >= 0 ? nextPages[galleryIndex] : null
+    const nextImages = [...(currentGallery?.content.images ?? []), ...imageDataUrls]
+
+    if (currentGallery) {
+      nextPages[galleryIndex] = {
+        ...currentGallery,
+        content: {
+          ...currentGallery.content,
+          images: nextImages,
+        },
+      }
+
+      return {
+        pages: nextPages,
+        activePageId: currentGallery.id,
+        didMutate: true,
+      }
+    }
+
+    const newGalleryPage: InvitePage = {
+      id: `gallery-${Date.now()}-${nextPages.length}`,
+      name: "Photo Gallery",
+      icon: ImageIcon,
+      content: {
+        ...getDefaultContentForPageType("gallery"),
+        images: nextImages,
+      },
+    }
+
+    return {
+      pages: [...nextPages, newGalleryPage],
+      activePageId: newGalleryPage.id,
+      didMutate: true,
+    }
+  }
+
+  const handleComposerFiles = (files: FileList | File[]) => {
+    const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"))
+
+    imageFiles.forEach((file) => {
       const reader = new FileReader()
       reader.onload = (event) => {
         const preview = event.target?.result as string
-        setAttachedImages(prev => [...prev, { name: file.name, preview }])
+        setAttachedImages((prev) => [...prev, { name: file.name, preview }])
       }
       reader.readAsDataURL(file)
     })
   }
 
-  const removeImage = (index: number) => {
-    setAttachedImages(prev => {
-      URL.revokeObjectURL(prev[index].preview)
-      return prev.filter((_, i) => i !== index)
+  const handlePromptInsert = (prompt: string) => {
+    setInputValue((current) => {
+      const next = current.trim()
+      return next ? `${next} ${prompt}` : prompt
     })
   }
 
-  useEffect(() => {
-    if (isDemoMode) return
+  const commitVersion = (nextPages: InvitePage[], nextActivePage?: string) => {
+    const nextVersionId = `v${Date.now()}`
+    const resolvedActivePage = nextActivePage ?? nextPages[0]?.id ?? activePage
 
+    setPages(nextPages)
+    setActivePage(resolvedActivePage)
+    setVersions((prev) => [...prev, {
+      id: nextVersionId,
+      label: nextVersionId,
+      timestamp: new Date(),
+      pages: nextPages,
+    }])
+    setActiveVersion(nextVersionId)
+  }
+
+  const loadVersion = (versionId: string) => {
+    const versionIndex = versions.findIndex((version) => version.id === versionId)
+    if (versionIndex === -1) {
+      return
+    }
+
+    const version = versions[versionIndex]
+    setPages(version.pages)
+    setActiveVersion(version.id)
+    setActivePage((current) => version.pages.some((page) => page.id === current) ? current : (version.pages[0]?.id ?? current))
+  }
+
+  const handleUndo = () => {
+    const activeIndex = versions.findIndex((version) => version.id === activeVersion)
+    if (activeIndex <= 0) {
+      return
+    }
+
+    loadVersion(versions[activeIndex - 1].id)
+  }
+
+  const handleRedo = () => {
+    const activeIndex = versions.findIndex((version) => version.id === activeVersion)
+    if (activeIndex === -1 || activeIndex >= versions.length - 1) {
+      return
+    }
+
+    loadVersion(versions[activeIndex + 1].id)
+  }
+
+  useEffect(() => {
     const timer = setTimeout(async () => {
       if (!authToken || !userId) return
-      
+
       setSaveStatus("saving")
       try {
         await fetch("/api/editor/save", {
           method: "POST",
-          headers: { 
+          headers: {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${authToken}`
           },
@@ -1051,6 +1232,7 @@ export default function EditorPage() {
             userId: userId,
             title: eventTitle,
             pages: pages.map(({ id, name, content }) => ({ id, name, content })),
+            brand: brandSettings,
             messages: messages.map(({ id, role, content: msgContent, timestamp, images }) => ({ id, role, content: msgContent, timestamp, images }))
           }),
         })
@@ -1062,18 +1244,20 @@ export default function EditorPage() {
       }
     }, 1000)
     return () => clearTimeout(timer)
-  }, [eventTitle, messages, pages, currentEventId, authToken, userId, isDemoMode])
+  }, [eventTitle, messages, pages, currentEventId, authToken, userId])
 
   const handleSendMessage = async () => {
     const prompt = inputValue.trim()
     const hasImages = attachedImages.length > 0
     if (!prompt && !hasImages || isTyping) return
 
+    const imageDataUrls = attachedImages.map((image) => image.preview)
+
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: prompt,
-        images: hasImages ? attachedImages.map(img => img.preview) : undefined,
+      images: hasImages ? imageDataUrls : undefined,
       timestamp: new Date()
     }
 
@@ -1083,43 +1267,49 @@ export default function EditorPage() {
     setInputValue("")
     setIsTyping(true)
 
+    let nextPages = pages
+    let nextActivePage = activePage
+    let didMutate = false
+
+    const imageInsertion = attachImagesToInvitation(nextPages, imageDataUrls)
+    if (imageInsertion.didMutate) {
+      nextPages = imageInsertion.pages
+      nextActivePage = imageInsertion.activePageId ?? nextActivePage
+      didMutate = true
+    }
+
     try {
-      const data = isDemoMode
-        ? getDemoAiResponse(prompt, activePage)
-        : await (async () => {
-            const response = await fetch("/api/editor/ai", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                prompt,
-                invitation: {
-                  id: currentEventId,
-                  title: currentInvitation.title,
-                  description: currentInvitation.description,
-                },
-                activePage,
-                pages: pages.map(({ id, name, content }) => ({ id, name, content })),
-                recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
-              }),
-            })
+      const response = await fetch("/api/editor/ai", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          invitation: {
+            id: currentEventId,
+            title: currentInvitation.title,
+            description: currentInvitation.description,
+          },
+          activePage: nextActivePage,
+          pages: nextPages.map(({ id, name, content }) => ({ id, name, content })),
+          images: hasImages ? toAiImages(attachedImages) : undefined,
+          recentMessages: conversation.slice(-8).map(({ role, content }) => ({ role, content })),
+        }),
+      })
 
-            if (response.status === 204) {
-              return null
-            }
+      if (!response.ok && response.status !== 204) {
+        throw new Error("AI request failed")
+      }
 
-            if (!response.ok) {
-              throw new Error("AI request failed")
-            }
-
-            return (await response.json()) as AiEditorResponse
-          })()
-
-      if (!data) {
+      if (response.status === 204) {
+        const response = generateFallbackAIResponse(prompt)
+        setMessages(prev => [...prev, response])
         return
       }
 
+      const data = (await response.json()) as AiEditorResponse
       const reply = data.reply?.trim() || "I took a pass at that and shaped the invitation with a clearer visual rhythm."
       const assistantMessage: Message = {
         id: Date.now().toString(),
@@ -1128,37 +1318,30 @@ export default function EditorPage() {
         timestamp: new Date(),
       }
 
-      let nextPages = pages
-      let nextActivePage = activePage
-      let didMutate = false
+      let responsePages = nextPages
+      let responseActivePage = nextActivePage
+      let responseDidMutate = didMutate
 
       if (data.actions?.length) {
-        const applied = applyAiActions(data.actions, pages)
-        nextPages = applied.pages
-        nextActivePage = applied.activePageId ?? activePage
-        didMutate = applied.didMutate
+        const applied = applyAiActions(data.actions, nextPages)
+        responsePages = applied.pages
+        responseActivePage = applied.activePageId ?? nextActivePage
+        responseDidMutate = applied.didMutate || responseDidMutate
       }
 
       setMessages(prev => [...prev, assistantMessage])
 
-      if (didMutate) {
-        setPages(nextPages)
-        setActivePage(nextActivePage)
+      if (responseDidMutate) {
+        setPages(responsePages)
+        setActivePage(responseActivePage)
 
-        const nextVersionId = `v${versions.length + 1}`
-        const newVersion: Version = {
-          id: nextVersionId,
-          label: nextVersionId,
-          timestamp: new Date(),
-          pages: nextPages,
-        }
-        setVersions(prev => [...prev, newVersion])
-        setActiveVersion(nextVersionId)
+        commitVersion(responsePages, responseActivePage)
       }
     } catch {
       const response = generateFallbackAIResponse(prompt)
       setMessages(prev => [...prev, response])
     } finally {
+      setAttachedImages([])
       setIsTyping(false)
     }
   }
@@ -1189,6 +1372,7 @@ export default function EditorPage() {
         primaryColor: "from-accent via-primary to-chart-3",
         backgroundColor: "bg-card",
       },
+      brand: brandSettings,
       pages: pages.map((page) => ({
         id: page.id,
         type: page.id.split("-")[0],
@@ -1196,16 +1380,14 @@ export default function EditorPage() {
       })),
     }
 
-    localStorage.setItem("eventora-preview-data", JSON.stringify(previewData))
+    localStorage.setItem("invyra-preview-data", JSON.stringify(previewData))
     router.push("/preview")
   }
 
   const removePage = (pageId: string) => {
     if (pages.length <= 1) return
-    setPages(prev => prev.filter(p => p.id !== pageId))
-    if (activePage === pageId) {
-      setActivePage(pages[0].id)
-    }
+    const nextPages = pages.filter((page) => page.id !== pageId)
+    commitVersion(nextPages, activePage === pageId ? nextPages[0]?.id : activePage)
   }
 
   const currentPage = pages.find(p => p.id === activePage) || pages[0]
@@ -1233,7 +1415,7 @@ export default function EditorPage() {
               {versions.map((version) => (
                 <DropdownMenuItem
                   key={version.id}
-                  onClick={() => setActiveVersion(version.id)}
+                  onClick={() => loadVersion(version.id)}
                 >
                   <span className="flex-1">{version.label}</span>
                   {activeVersion === version.id && <Check className="w-4 h-4 text-primary" />}
@@ -1246,10 +1428,22 @@ export default function EditorPage() {
 
           {/* Undo/Redo */}
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleUndo}
+              disabled={versions.findIndex((version) => version.id === activeVersion) <= 0}
+            >
               <Undo2 className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={handleRedo}
+              disabled={versions.findIndex((version) => version.id === activeVersion) >= versions.length - 1}
+            >
               <Redo2 className="w-4 h-4" />
             </Button>
           </div>
@@ -1317,9 +1511,12 @@ export default function EditorPage() {
           <Button
             size="sm"
             className="gradient-primary border-0 text-white"
-            disabled={isDemoMode || !authToken || !userId}
+            disabled={eventStatus === "published"}
             onClick={async () => {
-              if (isDemoMode) return
+              if (eventStatus === "published") {
+                return
+              }
+
               if (!authToken || !userId) return
               try {
                 const response = await fetch("/api/editor/publish", {
@@ -1328,7 +1525,7 @@ export default function EditorPage() {
                     "Content-Type": "application/json",
                     "Authorization": `Bearer ${authToken}`
                   },
-                  body: JSON.stringify({ 
+                  body: JSON.stringify({
                     eventId: currentEventId,
                     userId: userId
                   })
@@ -1336,8 +1533,9 @@ export default function EditorPage() {
                 if (response.ok) {
                   const data = await response.json().catch(() => ({}))
                   const eventId = data.eventId ?? currentEventId
+                  setEventStatus("published")
                   if (typeof window !== "undefined") {
-                    localStorage.setItem("eventora-last-published-event-id", eventId)
+                    localStorage.setItem("invyra-last-published-event-id", eventId)
                   }
                   const title = eventTitle ?? currentInvitation.title ?? "Untitled Event"
                   const pagesCount = pages.length
@@ -1362,14 +1560,43 @@ export default function EditorPage() {
               }
             }}
           >
-            Publish
+            {eventStatus === "published" ? "Published" : "Publish"}
           </Button>
         </div>
       </div>
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left panel - Chat */}
-        <div className="w-[400px] flex flex-col border-r border-border/50 bg-card/30">
+        <div
+          className={`relative w-[400px] flex flex-col border-r border-border/50 bg-card/30 ${isDraggingImages ? "bg-primary/5" : ""}`}
+          onDragEnter={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            dragDepthRef.current += 1
+            setIsDraggingImages(true)
+          }}
+          onDragOver={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setIsDraggingImages(true)
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+            if (dragDepthRef.current === 0) {
+              setIsDraggingImages(false)
+            }
+          }}
+          onDrop={handleDrop}
+        >
+          {isDraggingImages && (
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-3 text-sm text-muted-foreground shadow-lg">
+                Drop images here to attach them to the chat
+              </div>
+            </div>
+          )}
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {messages.map((message) => (
@@ -1388,6 +1615,19 @@ export default function EditorPage() {
                     : "bg-secondary rounded-bl-sm"
                     }`}>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                    {message.images && message.images.length > 0 && (
+                      <div className="mt-3 grid grid-cols-3 gap-2">
+                        {message.images.map((img, i) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={img}
+                            alt={`${message.role}-attachment-${i}`}
+                            className="w-full h-20 object-cover rounded-md bg-white"
+                          />
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1412,24 +1652,63 @@ export default function EditorPage() {
 
           {/* Input */}
           <div className="p-4 border-t border-border/50">
-            <div className="relative bg-secondary rounded-xl">
+            <div className={`relative bg-secondary rounded-xl p-3 ${isDraggingImages ? "ring-2 ring-primary/60 ring-offset-2 ring-offset-background" : ""}`}>
               <textarea
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Describe changes to your invitation..."
                 rows={2}
-                className="w-full bg-transparent px-4 pt-3 pb-10 text-sm resize-none focus:outline-none placeholder:text-muted-foreground/60"
+                className="w-full bg-transparent px-1 pt-0 pb-3 text-sm resize-none focus:outline-none placeholder:text-muted-foreground/60"
               />
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+              {attachedImages.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {attachedImages.map((image, index) => (
+                    <div key={`${image.name}-${index}`} className="relative h-10 w-10 rounded-md overflow-hidden border border-border/50 bg-background">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={image.preview} alt={image.name} className="h-full w-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        className="absolute -right-1 -top-1 h-4 w-4 rounded-full bg-background border border-border/50 text-[10px] leading-none"
+                        aria-label={`Remove ${image.name}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-2 border-t border-border/50 pt-3">
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    onClick={() => handlePromptInsert("Focus on the color palette and visual mood.")}
+                    aria-label="Suggest palette changes"
+                  >
                     <Palette className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    onClick={() => handlePromptInsert("Refine the typography hierarchy and spacing.")}
+                    aria-label="Suggest typography changes"
+                  >
                     <Type className="w-4 h-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground"
+                    onClick={() => imageInputRef.current?.click()}
+                    aria-label="Attach an image"
+                  >
                     <ImageIcon className="w-4 h-4" />
                   </Button>
                 </div>
@@ -1445,6 +1724,19 @@ export default function EditorPage() {
                   <Send className="w-3.5 h-3.5" />
                 </Button>
               </div>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) {
+                    handleComposerFiles(e.target.files)
+                  }
+                  e.currentTarget.value = ""
+                }}
+              />
             </div>
           </div>
         </div>
@@ -1564,7 +1856,7 @@ export default function EditorPage() {
                 : "w-full max-w-lg"
                 }`}
             >
-              <InvitePagePreview page={currentPage} />
+              <InvitePagePreview page={currentPage} brand={brandSettings} />
             </div>
 
             {/* Version indicator */}
@@ -1572,7 +1864,7 @@ export default function EditorPage() {
               {versions.slice(-3).map((version) => (
                 <button
                   key={version.id}
-                  onClick={() => setActiveVersion(version.id)}
+                  onClick={() => loadVersion(version.id)}
                   className={`w-8 h-8 rounded-lg border text-xs font-medium transition-all ${activeVersion === version.id
                     ? "border-primary bg-primary/20 text-primary"
                     : "border-border/50 bg-card/50 text-muted-foreground hover:border-primary/50"
@@ -1590,12 +1882,12 @@ export default function EditorPage() {
 }
 
 // Invite page preview component
-function InvitePagePreview({ page }: { page: InvitePage }) {
+function InvitePagePreview({ page, brand }: { page: InvitePage; brand?: any }) {
   const { content } = page
   const customElements = [...(content.elements ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
 
   return (
-    <div className="invitation-root bg-card rounded-2xl border border-border/50 overflow-hidden shadow-2xl">
+    <div className="invitation-root bg-card rounded-2xl border border-border/50 overflow-hidden shadow-2xl" style={getInvitationBrandStyles(brand)}>
       {/* Page header themed by brand variables */}
       <div className="h-28 gradient-primary relative">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,255,255,0.1),transparent)]" />
@@ -1604,7 +1896,7 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
       {/* Content */}
       <div className="p-8 -mt-12 relative">
         {/* Icon badge */}
-          <div className="w-14 h-14 mx-auto rounded-full bg-card border-4 border-card flex items-center justify-center shadow-lg mb-6">
+        <div className="w-14 h-14 mx-auto rounded-full bg-card border-4 border-card flex items-center justify-center shadow-lg mb-6">
           {page.icon ? (
             <page.icon className="w-5 h-5" style={{ color: 'var(--brand-primary, var(--primary))' }} />
           ) : (
@@ -1650,7 +1942,7 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
           )}
 
           {/* Form fields */}
-          {Array.isArray(content.fields) && (
+          {content.fields && (
             <div className="space-y-3 text-left">
               {content.fields.map((field, index) => (
                 <div key={index}>
@@ -1675,7 +1967,7 @@ function InvitePagePreview({ page }: { page: InvitePage }) {
           )}
 
           {/* Buttons */}
-          {Array.isArray(content.buttons) && (
+          {content.buttons && (
             <div className="flex justify-center gap-3 pt-4">
               {content.buttons.map((button, index) => (
                 <Button
@@ -1885,17 +2177,17 @@ function generateFallbackAIResponse(input: string): Message {
   let response = ""
 
   if (lowerInput.includes("color") || lowerInput.includes("theme")) {
-    response = "Let's make this feel more alive. I would push the palette toward warmer contrast, soften the shadows, and keep the gradient work intentional rather than decorative."
+    response = "Let’s make this feel more alive. I’d push the palette toward warmer contrast, soften the shadows, and keep the gradient work intentional rather than decorative."
   } else if (lowerInput.includes("add") && lowerInput.includes("page")) {
-    response = "I can help with that. A good next move would be to add a page that extends the flow instead of just increasing the page count. Location, schedule, or FAQ would all fit naturally here."
+    response = "I can help with that. A good next move is to add a page that extends the flow instead of just increasing the page count. Location, schedule, or FAQ would all fit naturally here."
   } else if (lowerInput.includes("font") || lowerInput.includes("text")) {
-    response = "The typography should carry more personality without losing clarity. I would strengthen the hierarchy, give the headlines more presence, and keep the body copy calm and readable."
+    response = "The typography should carry more personality without losing clarity. I’d strengthen the hierarchy, give the headlines more presence, and keep the body copy calm and readable."
   } else if (lowerInput.includes("rsvp") || lowerInput.includes("form")) {
     response = "The RSVP page could feel more thoughtful with better spacing, fewer visual distractions, and a cleaner flow through the form fields."
   } else if (lowerInput.includes("animate") || lowerInput.includes("animation")) {
-    response = "Yes - but keep the motion purposeful. I would use gentle entrances, layered transitions, and feedback that feels immediate instead of flashy."
+    response = "Yes - but keep the motion purposeful. I’d use gentle entrances, layered transitions, and feedback that feels immediate instead of flashy."
   } else {
-    response = `I looked at the request through an Aria Voss lens and would keep pushing it toward something more intentional. The next refinement should create clearer hierarchy, more breathing room, and a stronger emotional tone.`
+    response = `Absolutely — I’d keep pushing this toward something more intentional. The next refinement should create clearer hierarchy, more breathing room, and a stronger emotional tone.`
   }
 
   return {
@@ -1903,79 +2195,6 @@ function generateFallbackAIResponse(input: string): Message {
     role: "assistant",
     content: response,
     timestamp: new Date()
-  }
-}
-
-function getDemoAiResponse(input: string, activePageId: string): AiEditorResponse {
-  const lowerInput = input.toLowerCase()
-
-  if (lowerInput.includes("page") || lowerInput.includes("add") || lowerInput.includes("new")) {
-    return {
-      reply: "Mock build step 1: I would add a supporting page, move the flow there, and keep the copy focused so the invite unfolds more naturally.",
-      actions: [
-        {
-          type: "add_page",
-          pageType: "details",
-          name: "Details",
-          content: {
-            headline: "Event Details",
-            body: "The practical details stay clear, while the page still feels designed instead of purely functional.",
-          },
-        },
-        {
-          type: "focus_page",
-          pageId: activePageId,
-        },
-      ],
-    }
-  }
-
-  if (
-    lowerInput.includes("color") ||
-    lowerInput.includes("theme") ||
-    lowerInput.includes("brand") ||
-    lowerInput.includes("style") ||
-    lowerInput.includes("context")
-  ) {
-    return {
-      reply: "Mock build step 2: I would shift the context, tighten the hierarchy, and tune the page tone so the editor shows a stronger visual direction.",
-      actions: [
-        {
-          type: "patch_page",
-          pageId: activePageId,
-          content: {
-            headline: "A More Intentional Invitation",
-            subheadline: "Warmer contrast, calmer spacing, and a clearer reading path",
-            body: "This version keeps the page focused on the invite experience instead of the generic template feel.",
-          },
-        },
-      ],
-    }
-  }
-
-  const demoElementId = `demo-element-${Date.now()}`
-
-  return {
-    reply: "Mock build step 3: I would work directly in the editor canvas, add a supporting element, and refine the structure where the user can see the change immediately.",
-    actions: [
-      {
-        type: "add_element",
-        pageId: activePageId,
-        element: {
-          id: demoElementId,
-          type: "text",
-          order: 0,
-          content: {
-            text: "The layout now feels calmer, with a clearer rhythm and more breathing room.",
-          },
-        },
-      },
-      {
-        type: "focus_element",
-        pageId: activePageId,
-        elementId: demoElementId,
-      },
-    ],
   }
 }
 
@@ -1989,18 +2208,9 @@ function applyAiActions(actions: AiAction[], currentPages: InvitePage[]) {
       const pageIndex = nextPages.findIndex(page => page.id === action.pageId)
       if (pageIndex === -1) continue
 
-      const patchedContent = {
-        ...action.content,
-        buttons: Array.isArray(action.content.buttons) ? action.content.buttons : undefined,
-        fields: Array.isArray(action.content.fields) ? action.content.fields : undefined,
-        items: Array.isArray(action.content.items) ? action.content.items : undefined,
-        elements: Array.isArray(action.content.elements) ? action.content.elements : undefined,
-        images: Array.isArray(action.content.images) ? action.content.images : undefined,
-      }
-
       nextPages = nextPages.map(page => (
         page.id === action.pageId
-          ? { ...page, content: { ...page.content, ...patchedContent } }
+          ? { ...page, content: { ...page.content, ...action.content } }
           : page
       ))
       activePageId = action.pageId

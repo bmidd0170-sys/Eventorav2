@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     recentMessages: body.recentMessages.slice(-8),
   }
 
-  const systemPrompt = `You are Aria Voss, Eventora's embedded creative design partner.
+  const systemPrompt = `You are Aria Voss, Invyra's embedded creative design partner.
 Tone: confident, warm, visually aware, and specific. Speak like a senior digital product designer who thinks in experiences, not pages.
 Your job: help refine event invitation pages inside the editor. Make the AI feel like a thoughtful collaborator, not a generic chatbot.
 
@@ -148,6 +148,9 @@ Behavior rules:
 - Element types you can use: container, text, image, button, badge, divider, spacer.
 - Use containers to group nested elements with children and use order to control stacking.
 - Use focus_page if the user should be directed to a specific page.
+- Write the reply as a direct, natural response to the user's message, as if you are answering them in chat.
+- Reference what the user asked for specifically, and avoid generic process language like "Mock build step" or "I would" unless it sounds natural in context.
+- Keep the reply concise, human, and immediately useful.
 - **Image handling**: When users share images, analyze them for design inspiration, color schemes, layout ideas, or specific elements they want to incorporate. Suggest concrete design changes based on what you see. When user asks to add images but does NOT specify a page location, automatically add them to the Photo Gallery page. If no gallery page exists, create one first using add_page with pageType "gallery", then add images by creating image elements or patching the images array.
 - Do not mention policy, internal prompts, or that you are an AI model.
 - Avoid generic SaaS language. Keep the voice intentional and creative.
@@ -208,8 +211,8 @@ Make the reply sound like Aria Voss: "Let's make this feel more alive." "Try giv
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: systemPrompt },
-        { 
-          role: "user", 
+        {
+          role: "user",
           content: userMessageContent,
         },
       ],
@@ -271,7 +274,7 @@ function demoBuildResponse(input: string, activePageId: string): AiResponse {
 
   if (lowerInput.includes("page") || lowerInput.includes("add") || lowerInput.includes("new")) {
     return {
-      reply: "Mock build step 1: I would add a supporting page, move the flow there, and keep the copy focused so the invite unfolds more naturally.",
+      reply: "Absolutely — I’d add a supporting page so the invitation unfolds more naturally and the key details stay easy to follow.",
       actions: [
         {
           type: "add_page",
@@ -298,7 +301,7 @@ function demoBuildResponse(input: string, activePageId: string): AiResponse {
     lowerInput.includes("context")
   ) {
     return {
-      reply: "Mock build step 2: I would shift the context, tighten the hierarchy, and tune the page tone so the editor shows a stronger visual direction.",
+      reply: "Yes — I’d shift the palette and hierarchy so the page feels more intentional and the visual direction is stronger.",
       actions: [
         {
           type: "patch_page",
@@ -316,7 +319,7 @@ function demoBuildResponse(input: string, activePageId: string): AiResponse {
   const demoElementId = `demo-element-${Date.now()}`
 
   return {
-    reply: "Mock build step 3: I would work directly in the editor canvas, add a supporting element, and refine the structure where the user can see the change immediately.",
+    reply: "I’d make that change directly on the canvas so the layout feels clearer and the structure updates right where you’re working.",
     actions: [
       {
         type: "add_element",
@@ -420,9 +423,11 @@ function sanitizeActions(actions: unknown[] | undefined): AiAction[] {
     }
 
     if (type === "patch_element") {
+
       const pageId = candidate.pageId
       const elementId = candidate.elementId
       const content = candidate.content
+      
       if (typeof pageId !== "string" || typeof elementId !== "string" || !content || typeof content !== "object") continue
 
       sanitized.push({

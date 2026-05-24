@@ -155,15 +155,15 @@ export function TutorialWalkthrough() {
   // Sync tutorial state to localStorage so other pages (like Preview) can react
   useEffect(() => {
     try {
-      localStorage.setItem("eventora-tutorial-is-open", isOpen ? "true" : "false")
-      localStorage.setItem("eventora-tutorial-current-step", String(currentStepIndex))
+      localStorage.setItem("invyra-tutorial-is-open", isOpen ? "true" : "false")
+      localStorage.setItem("invyra-tutorial-current-step", String(currentStepIndex))
     } catch (e) {
       /* ignore */
     }
     return () => {
       try {
-        localStorage.removeItem("eventora-tutorial-is-open")
-        localStorage.removeItem("eventora-tutorial-current-step")
+        localStorage.removeItem("invyra-tutorial-is-open")
+        localStorage.removeItem("invyra-tutorial-current-step")
       } catch (e) {
         /* ignore */
       }
@@ -206,7 +206,7 @@ export function TutorialWalkthrough() {
         ],
       }
       try {
-        localStorage.setItem("eventora-preview-data", JSON.stringify(samplePreview))
+        localStorage.setItem("invyra-preview-data", JSON.stringify(samplePreview))
       } catch (e) {
         /* ignore */
       }

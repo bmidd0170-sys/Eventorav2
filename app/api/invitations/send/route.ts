@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     for (const email of emails) {
       const token = randomBytes(32).toString("hex")
-      
+
       // Create or update the invitation
       const invitation = await prisma.invitation.upsert({
         where: {
@@ -84,16 +84,19 @@ export async function POST(req: NextRequest) {
     }
 
     // Send emails (call your email service)
-    try {
-      for (const email of emails) {
-        const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://eventora.app"}/i/${encodeURIComponent(eventId)}`
-        
+    const emailResults: { email: string; success: boolean; error?: string }[] = []
+    const appUrl = req.nextUrl.origin
+
+    for (const email of emails) {
+      try {
+        const inviteUrl = `${appUrl}/i/${encodeURIComponent(eventId)}`
+
         const htmlEmail = `
           <p>${message?.replace(/\n/g, '<br>') || "You're invited!"}</p>
           <p><a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">View Invitation</a></p>
         `
-        
-        await fetch(`${process.env.NEXT_PUBLIC_APP_URL || "https://eventora.app"}/api/send-email`, {
+
+        const emailResponse = await fetch(`${appUrl}/api/send-email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -104,16 +107,34 @@ export async function POST(req: NextRequest) {
             fromName: event.title,
           }),
         })
+
+        if (!emailResponse.ok) {
+          const responseText = await emailResponse.text().catch(() => "")
+          const errorData = responseText ? (() => {
+            try {
+              return JSON.parse(responseText) as { error?: string; details?: string }
+            } catch {
+              return null
+            }
+          })() : null
+          const errorMsg = errorData?.details || errorData?.error || responseText || 'Email API returned an error'
+          throw new Error(errorMsg)
+        }
+
+        emailResults.push({ email, success: true })
+        console.log(`[/api/invitations/send] Successfully sent email to ${email}`)
+      } catch (emailError) {
+        const errorMsg = emailError instanceof Error ? emailError.message : String(emailError)
+        console.error(`[/api/invitations/send] Failed to send email to ${email}:`, errorMsg)
+        emailResults.push({ email, success: false, error: errorMsg })
       }
-    } catch (emailError) {
-      console.error('Failed to send emails:', emailError)
-      // Continue - emails may fail but invitations are still created
     }
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       invitations: createdInvitations,
       count: createdInvitations.length,
+      emailResults: emailResults,
     }, { status: 200 })
   } catch (error) {
     console.error("Error sending invitations:", error)

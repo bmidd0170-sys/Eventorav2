@@ -17,7 +17,7 @@ const poppins = Poppins({
 });
 
 export const metadata: Metadata = {
-  title: 'Eventora - Create Invitations That Feel Alive',
+  title: 'Invyra - Create Invitations That Feel Alive',
   description: 'AI-powered event invitation platform. Design freely, plan efficiently, and grow your brand with intelligent creation tools.',
   generator: 'v0.app',
   icons: {

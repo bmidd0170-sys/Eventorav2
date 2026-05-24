@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
           subject: email.subject,
           text: email.text,
           html: email.html,
-          fromName: "Eventora",
+          fromName: "Invyra",
         })
       } catch (emailError) {
         console.warn("Failed to send tutorial completion email", emailError)

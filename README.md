@@ -1,9 +1,9 @@
 
-# Eventora
+# Invyra
 
 Live demo: https://eventorav2.vercel.app
 
-Eventora is an event management web application built with Next.js (App Router), TypeScript, Prisma (PostgreSQL), Firebase (social features), and several modern UI/tooling libraries. It provides event creation, guest lists, invitations, editor tools, and a small social layer for connections and requests.
+Invyra is an event management web application built with Next.js (App Router), TypeScript, Prisma (PostgreSQL), Firebase (social features), and several modern UI/tooling libraries. It provides event creation, guest lists, invitations, editor tools, and a small social layer for connections and requests.
 
 **Quick Links**
 - **Source:** This repository (root)
@@ -61,6 +61,7 @@ npx prisma db push
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps API key for map features
 - `OPENAI_API_KEY` — optional; used by the editor AI route
 - Firebase config for auth + Firestore (see `lib/firebase.ts`)
+- Firebase Admin credentials for server-side account deletion: `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, and optionally `FIREBASE_PROJECT_ID`
 
 **Project Routes (high level)**
 - `/` — Landing (public)

@@ -47,36 +47,12 @@ export async function PUT(req: NextRequest) {
     const displayName = typeof body.displayName === "string" ? body.displayName.trim() : undefined
     const photoUrl = typeof body.photoUrl === "string" ? body.photoUrl.trim() : undefined
 
-    const nextDisplayName = displayName !== undefined ? displayName || null : authUser.dbUser.displayName
-    const nextPhotoUrl = photoUrl !== undefined ? photoUrl || null : authUser.dbUser.photoUrl
-
-    const updatedUser = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.update({
-        where: { id: authUser.dbUser.id },
-        data: {
-          ...(displayName !== undefined ? { displayName: displayName || null } : {}),
-          ...(photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
-        },
-      })
-
-      await Promise.all([
-        tx.socialConnection.updateMany({
-          where: { connectedUserId: authUser.dbUser.id },
-          data: {
-            connectedUserName: nextDisplayName || authUser.dbUser.email,
-            connectedUserEmail: authUser.dbUser.email,
-          },
-        }),
-        tx.connectionRequest.updateMany({
-          where: { fromUserId: authUser.dbUser.id, status: "pending" },
-          data: {
-            fromUserName: nextDisplayName || authUser.dbUser.email,
-            fromUserEmail: authUser.dbUser.email,
-          },
-        }),
-      ])
-
-      return user
+    const updatedUser = await prisma.user.update({
+      where: { id: authUser.dbUser.id },
+      data: {
+        ...(displayName !== undefined ? { displayName: displayName || null } : {}),
+        ...(photoUrl !== undefined ? { photoUrl: photoUrl || null } : {}),
+      },
     })
 
     return NextResponse.json({ user: serializeUser(updatedUser) }, { status: 200 })

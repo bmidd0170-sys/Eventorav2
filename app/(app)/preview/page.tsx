@@ -4,7 +4,9 @@ import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { defaultInvitationId } from "@/lib/invitations"
-import { InvitationPageRenderer as SharedInvitationPageRenderer } from "@/components/invitation/invitation-page-renderer"
+import { InvitationPageRenderer as SharedInvitationPageRenderer, getInvitationBrandStyles } from "@/components/invitation/invitation-page-renderer"
+import { useBrand } from "@/components/brand/brand-provider"
+import type { BrandSettings } from "@/lib/branding"
 import {
   ChevronLeft,
   ChevronRight,
@@ -85,6 +87,7 @@ interface InvitationPage {
 interface InvitationData {
   id: string
   title: string
+  brand?: BrandSettings | null
   theme: {
     primaryColor: string
     backgroundColor: string
@@ -116,6 +119,7 @@ const defaultInvitation: InvitationData = {
 export default function PreviewPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { brand: contextBrand } = useBrand()
 
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
@@ -124,7 +128,7 @@ export default function PreviewPage() {
 
   // Load invitation data from localStorage (set by editor)
   useEffect(() => {
-    const storedData = localStorage.getItem("eventora-preview-data")
+    const storedData = localStorage.getItem("invyra-preview-data")
     if (storedData) {
       try {
         const parsed = JSON.parse(storedData)
@@ -137,6 +141,7 @@ export default function PreviewPage() {
 
   const currentPage = invitation.pages[currentPageIndex]
   const totalPages = invitation.pages.length
+  const activeBrand = invitation.brand ?? contextBrand
 
   const goToNextPage = () => {
     if (currentPageIndex < totalPages - 1) {
@@ -151,7 +156,7 @@ export default function PreviewPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#0a0a0f] z-50 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-[#0a0a0f] z-50 flex flex-col overflow-hidden" style={getInvitationBrandStyles(activeBrand)}>
       {/* Header */}
       <div className="h-14 shrink-0 border-b border-border/30 bg-card/50 backdrop-blur-sm flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
@@ -196,15 +201,15 @@ export default function PreviewPage() {
             onClick={() => {
               try {
                 // Prefer the event id from preview data so we go to the same event's guest list
-                const stored = localStorage.getItem("eventora-preview-data")
+                const stored = localStorage.getItem("invyra-preview-data")
                 const preview = stored ? JSON.parse(stored) : null
                 const previewId = preview?.id || defaultInvitationId
 
-                const isTutorialOpen = localStorage.getItem("eventora-tutorial-is-open") === "true"
-                const currentStep = parseInt(localStorage.getItem("eventora-tutorial-current-step") || "-1", 10)
+                const isTutorialOpen = localStorage.getItem("invyra-tutorial-is-open") === "true"
+                const currentStep = parseInt(localStorage.getItem("invyra-tutorial-current-step") || "-1", 10)
                 // If tutorial is active and currently on the preview step (index 3), advance to step 4
                 if (isTutorialOpen && currentStep === 3) {
-                  localStorage.setItem("eventora-tutorial-current-step", "4")
+                  localStorage.setItem("invyra-tutorial-current-step", "4")
                   router.push(`/guest-list/${previewId}`)
                   return
                 }
@@ -225,8 +230,8 @@ export default function PreviewPage() {
       <div className="flex-1 min-h-0 flex items-center justify-center p-4 md:p-8">
         <div
           className={`h-full max-h-full flex flex-col transition-all duration-300 ${previewMode === "mobile"
-              ? "w-[375px]"
-              : "w-full max-w-2xl"
+            ? "w-[375px]"
+            : "w-full max-w-2xl"
             }`}
         >
           {/* Phone frame for mobile */}
@@ -243,14 +248,16 @@ export default function PreviewPage() {
             {/* Invitation content - scrollable */}
             <div
               className={`h-full bg-card overflow-y-auto shadow-2xl ${previewMode === "mobile"
-                  ? "rounded-[2rem] relative z-10"
-                  : "rounded-2xl"
+                ? "rounded-[2rem] relative z-10"
+                : "rounded-2xl"
                 }`}
+              style={getInvitationBrandStyles(activeBrand)}
             >
               <SharedInvitationPageRenderer
                 page={currentPage}
                 rsvpResponse={rsvpResponse}
                 setRsvpResponse={setRsvpResponse}
+                brand={activeBrand}
               />
             </div>
           </div>
@@ -277,8 +284,8 @@ export default function PreviewPage() {
                 key={page.id}
                 onClick={() => setCurrentPageIndex(index)}
                 className={`transition-all ${index === currentPageIndex
-                    ? "w-8 h-2 rounded-full gradient-primary"
-                    : "w-2 h-2 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                  ? "w-8 h-2 rounded-full gradient-primary"
+                  : "w-2 h-2 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/50"
                   }`}
               />
             ))}
@@ -615,8 +622,8 @@ function RSVPPage({
         <button
           onClick={() => setRsvpResponse("attending")}
           className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "attending"
-              ? "border-accent bg-accent/10 text-accent"
-              : "border-border/50 hover:border-accent/50"
+            ? "border-accent bg-accent/10 text-accent"
+            : "border-border/50 hover:border-accent/50"
             }`}
         >
           <p className="font-medium text-sm">Attending</p>
@@ -625,8 +632,8 @@ function RSVPPage({
         <button
           onClick={() => setRsvpResponse("not-attending")}
           className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "not-attending"
-              ? "border-destructive bg-destructive/10 text-destructive"
-              : "border-border/50 hover:border-destructive/50"
+            ? "border-destructive bg-destructive/10 text-destructive"
+            : "border-border/50 hover:border-destructive/50"
             }`}
         >
           <p className="font-medium text-sm">Not Attending</p>

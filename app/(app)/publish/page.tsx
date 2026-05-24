@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { auth } from "@/lib/firebase"
-import { 
-  Link2, 
-  Mail, 
-  Users, 
-  Check, 
-  Copy, 
+import { getConnections } from "@/lib/connections"
+import {
+  Link2,
+  Mail,
+  Users,
+  Check,
+  Copy,
   ChevronLeft,
   ArrowRight,
   QrCode,
@@ -67,6 +68,8 @@ export default function PublishPage() {
   const [linkVisibility, setLinkVisibility] = useState<"public" | "private">("public")
   const [emailSubject, setEmailSubject] = useState("You're Invited!")
   const [emailMessage, setEmailMessage] = useState("I'd love for you to join me at this special event. Click the link below to view the invitation and RSVP.")
+  const [isSendingEmails, setIsSendingEmails] = useState(false)
+  const [emailSendStatus, setEmailSendStatus] = useState<{ success: number; failed: number; errors: { email: string; error: string }[] } | null>(null)
 
   useEffect(() => {
     setIsPublished(shareMode)
@@ -81,7 +84,7 @@ export default function PublishPage() {
     setResolvedEventId(eventIdFromParams)
 
     if (typeof window !== "undefined") {
-      localStorage.setItem("eventora-last-published-event-id", eventIdFromParams)
+      localStorage.setItem("invyra-last-published-event-id", eventIdFromParams)
     }
   }, [eventParam, projectParam])
 
@@ -94,7 +97,7 @@ export default function PublishPage() {
       return
     }
 
-    const lastPublishedEventId = localStorage.getItem("eventora-last-published-event-id")
+    const lastPublishedEventId = localStorage.getItem("invyra-last-published-event-id")
     if (lastPublishedEventId) {
       setResolvedEventId(lastPublishedEventId)
     }
@@ -122,73 +125,64 @@ export default function PublishPage() {
   }, [])
 
   useEffect(() => {
-    const query = searchQuery.trim()
-
-    if (!query) {
-      setContacts([])
-      setSearchError("")
-      setSearchLoading(false)
-      return
-    }
-
-    if (!currentUser) {
-      setContacts([])
-      setSearchError("Sign in to search Eventora users.")
-      setSearchLoading(false)
-      return
-    }
-
     let isActive = true
 
-    const timeoutId = window.setTimeout(async () => {
+    const loadConnections = async () => {
+      if (!currentUser) {
+        setContacts([])
+        setSearchError("Sign in to view your connections.")
+        setSearchLoading(false)
+        return
+      }
+
       setSearchLoading(true)
       setSearchError("")
 
       try {
-        const token = await currentUser.getIdToken()
-        const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        })
-
-        if (!response.ok) {
-          throw new Error(`Search failed with ${response.status}`)
-        }
-
-        const data = await response.json()
-        const users = Array.isArray(data.users) ? data.users : []
+        const connections = await getConnections(currentUser.uid)
 
         if (!isActive) {
           return
         }
 
-        setContacts(users.map((user: { id: string; displayName: string | null; email: string; photoUrl: string | null }) => ({
-          id: user.id,
-          name: user.displayName || user.email,
-          email: user.email,
-          photoUrl: user.photoUrl,
-        })))
+        setContacts(
+          connections.map((connection) => ({
+            id: connection.connectedUserId,
+            name: connection.connectedUserName,
+            email: connection.connectedUserEmail,
+          }))
+        )
       } catch (error) {
         if (!isActive) {
           return
         }
 
-        console.error("Failed to search users:", error)
+        console.error("Failed to load connections:", error)
         setContacts([])
-        setSearchError("Could not search users right now.")
+        setSearchError("Could not load your connections right now.")
       } finally {
         if (isActive) {
           setSearchLoading(false)
         }
       }
-    }, 300)
+    }
+
+    void loadConnections()
 
     return () => {
       isActive = false
-      window.clearTimeout(timeoutId)
     }
-  }, [currentUser, searchQuery])
+  }, [currentUser])
+
+  const filteredContacts = contacts.filter((contact) => {
+    const query = searchQuery.trim().toLowerCase()
+
+    if (!query) {
+      return true
+    }
+
+    return contact.name.toLowerCase().includes(query) || contact.email.toLowerCase().includes(query)
+  })
 
   const handleCopyLink = () => {
     if (!inviteLink) {
@@ -234,10 +228,15 @@ export default function PublishPage() {
 
     if (!emailsToSend.length || !inviteLink || !resolvedEventId) return
 
+    setIsSendingEmails(true)
+    setEmailSendStatus(null)
+
     try {
       const user = auth.currentUser
       if (!user) {
         console.error('Not authenticated')
+        setEmailSendStatus({ success: 0, failed: emailsToSend.length, errors: emailsToSend.map(e => ({ email: e, error: 'Not authenticated' })) })
+        setIsSendingEmails(false)
         return
       }
 
@@ -246,7 +245,7 @@ export default function PublishPage() {
       // Send invitations via the new endpoint that creates database records
       const response = await fetch('/api/invitations/send', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
@@ -259,43 +258,68 @@ export default function PublishPage() {
       })
 
       if (!response.ok) {
-        console.error('Failed to send invitations:', response.statusText)
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        console.error('Failed to send invitations:', errorData)
+        setEmailSendStatus({ 
+          success: 0, 
+          failed: emailsToSend.length, 
+          errors: emailsToSend.map(e => ({ email: e, error: errorData.error || 'Failed to send' })) 
+        })
+        setIsSendingEmails(false)
         return
       }
 
       const result = await response.json()
       console.log(`Successfully sent ${result.count} invitations`)
-      
-      // Clear the email list after sending
-      if (activeMethod === "email") {
-        setEmailAddresses([])
-        setNewEmail("")
-      } else if (activeMethod === "connections") {
-        setSelectedContacts([])
+
+      // Track email results
+      const emailResults = result.emailResults || []
+      const successCount = emailResults.filter((r: any) => r.success).length
+      const failedCount = emailResults.filter((r: any) => !r.success).length
+      const errors = emailResults.filter((r: any) => !r.success).map((r: any) => ({ email: r.email, error: r.error }))
+
+      setEmailSendStatus({ success: successCount, failed: failedCount, errors })
+
+      // Clear the email list after sending only if all succeeded
+      if (failedCount === 0) {
+        if (activeMethod === "email") {
+          setEmailAddresses([])
+          setNewEmail("")
+        } else if (activeMethod === "connections") {
+          setSelectedContacts([])
+        }
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to send invitations:', error)
+      setEmailSendStatus({ 
+        success: 0, 
+        failed: emailsToSend.length, 
+        errors: emailsToSend.map(e => ({ email: e, error: errorMsg })) 
+      })
+    } finally {
+      setIsSendingEmails(false)
     }
   }
 
   const selectedContactIds = new Set(selectedContacts.map((contact) => contact.id))
 
   const methods = [
-    { 
-      id: "link" as const, 
-      label: "Share Link", 
+    {
+      id: "link" as const,
+      label: "Share Link",
       icon: Link2,
       description: "Copy a link to share anywhere"
     },
-    { 
-      id: "email" as const, 
-      label: "Send Email", 
+    {
+      id: "email" as const,
+      label: "Send Email",
       icon: Mail,
       description: "Send invitations via email"
     },
-    { 
-      id: "connections" as const, 
-      label: "Connections", 
+    {
+      id: "connections" as const,
+      label: "Connections",
       icon: Users,
       description: "Invite from your contact list"
     },
@@ -333,8 +357,8 @@ export default function PublishPage() {
               Publish your invitation to make it live. You&apos;ll be able to share it via link, email, or directly to your connections.
             </p>
 
-            <Button 
-              size="lg" 
+            <Button
+              size="lg"
               className="gradient-primary border-0 text-white px-8"
               onClick={handlePublish}
             >
@@ -393,11 +417,10 @@ export default function PublishPage() {
             <button
               key={method.id}
               onClick={() => setActiveMethod(method.id)}
-              className={`flex items-center gap-3 px-5 py-3 rounded-xl border transition-all ${
-                activeMethod === method.id
-                  ? "border-primary bg-primary/10 text-foreground"
-                  : "border-border/50 bg-card hover:border-border hover:bg-card/80 text-muted-foreground"
-              }`}
+              className={`flex items-center gap-3 px-5 py-3 rounded-xl border transition-all ${activeMethod === method.id
+                ? "border-primary bg-primary/10 text-foreground"
+                : "border-border/50 bg-card hover:border-border hover:bg-card/80 text-muted-foreground"
+                }`}
             >
               <method.icon className="w-5 h-5" />
               <div className="text-left">
@@ -418,11 +441,10 @@ export default function PublishPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setLinkVisibility("public")}
-                    className={`flex-1 flex items-center gap-3 p-4 rounded-xl border transition-all ${
-                      linkVisibility === "public"
-                        ? "border-primary bg-primary/10"
-                        : "border-border/50 hover:border-border"
-                    }`}
+                    className={`flex-1 flex items-center gap-3 p-4 rounded-xl border transition-all ${linkVisibility === "public"
+                      ? "border-primary bg-primary/10"
+                      : "border-border/50 hover:border-border"
+                      }`}
                   >
                     <Globe className="w-5 h-5 text-primary" />
                     <div className="text-left">
@@ -432,11 +454,10 @@ export default function PublishPage() {
                   </button>
                   <button
                     onClick={() => setLinkVisibility("private")}
-                    className={`flex-1 flex items-center gap-3 p-4 rounded-xl border transition-all ${
-                      linkVisibility === "private"
-                        ? "border-primary bg-primary/10"
-                        : "border-border/50 hover:border-border"
-                    }`}
+                    className={`flex-1 flex items-center gap-3 p-4 rounded-xl border transition-all ${linkVisibility === "private"
+                      ? "border-primary bg-primary/10"
+                      : "border-border/50 hover:border-border"
+                      }`}
                   >
                     <Lock className="w-5 h-5 text-accent" />
                     <div className="text-left">
@@ -455,7 +476,7 @@ export default function PublishPage() {
                     <Link2 className="w-4 h-4 text-muted-foreground shrink-0" />
                     <span className="text-sm truncate">{inviteLink}</span>
                   </div>
-                  <Button 
+                  <Button
                     onClick={handleCopyLink}
                     className={linkCopied ? "bg-green-500 hover:bg-green-500" : ""}
                   >
@@ -518,12 +539,12 @@ export default function PublishPage() {
                 {emailAddresses.length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {emailAddresses.map((email) => (
-                      <div 
+                      <div
                         key={email}
                         className="flex items-center gap-2 px-3 py-1.5 bg-secondary rounded-full text-sm"
                       >
                         <span>{email}</span>
-                        <button 
+                        <button
                           onClick={() => handleRemoveEmail(email)}
                           className="text-muted-foreground hover:text-foreground"
                         >
@@ -557,14 +578,52 @@ export default function PublishPage() {
                 />
               </div>
 
+              {/* Email send status */}
+              {emailSendStatus && (
+                <div className={`rounded-xl border p-4 space-y-2 ${
+                  emailSendStatus.failed === 0
+                    ? "border-green-500/20 bg-green-500/10"
+                    : "border-amber-500/20 bg-amber-500/10"
+                }`}>
+                  <div className="text-sm font-medium">
+                    {emailSendStatus.failed === 0 ? (
+                      <span className="text-green-700 dark:text-green-400">✓ All emails sent successfully</span>
+                    ) : (
+                      <span className="text-amber-700 dark:text-amber-400">
+                        {emailSendStatus.success > 0 ? `✓ ${emailSendStatus.success} sent, ` : ''}
+                        ✗ {emailSendStatus.failed} failed
+                      </span>
+                    )}
+                  </div>
+                  {emailSendStatus.errors.length > 0 && (
+                    <div className="text-xs space-y-1 mt-2">
+                      {emailSendStatus.errors.map((err, idx) => (
+                        <div key={idx} className="text-amber-700 dark:text-amber-400">
+                          <strong>{err.email}:</strong> {err.error}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Send button */}
-              <Button 
+              <Button
                 className="w-full gradient-primary border-0 text-white"
-                disabled={emailAddresses.length === 0}
+                disabled={emailAddresses.length === 0 || isSendingEmails}
                 onClick={handleSendEmails}
               >
-                <Send className="w-4 h-4 mr-2" />
-                Send {emailAddresses.length > 0 ? `to ${emailAddresses.length} recipient${emailAddresses.length > 1 ? 's' : ''}` : 'Invitations'}
+                {isSendingEmails ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Send {emailAddresses.length > 0 ? `to ${emailAddresses.length} recipient${emailAddresses.length > 1 ? 's' : ''}` : 'Invitations'}
+                  </>
+                )}
               </Button>
             </div>
           )}
@@ -573,11 +632,11 @@ export default function PublishPage() {
             <div className="space-y-6">
               {/* Search */}
               <div>
-                <label className="text-sm font-medium mb-3 block">Search Eventora users</label>
+                <label className="text-sm font-medium mb-3 block">Your connections</label>
                 <div className="relative mb-4">
                   <Search className="pointer-events-none absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Search by name or email"
+                    placeholder="Filter by name or email"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-9"
@@ -596,28 +655,33 @@ export default function PublishPage() {
                   {searchLoading && (
                     <div className="flex items-center gap-3 rounded-xl border border-border/50 bg-secondary/40 px-4 py-4 text-sm text-muted-foreground">
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Searching Neon users...
+                      Loading connections...
                     </div>
                   )}
 
-                  {!searchLoading && searchQuery.trim() && contacts.length === 0 && !searchError && (
+                  {!searchLoading && !searchQuery.trim() && contacts.length === 0 && !searchError && (
                     <div className="rounded-xl border border-border/50 bg-secondary/40 px-4 py-6 text-sm text-muted-foreground">
-                      No users found. Try a full name or email address.
+                      You do not have any connections yet.
                     </div>
                   )}
 
-                  {contacts.map((contact) => {
+                  {!searchLoading && searchQuery.trim() && filteredContacts.length === 0 && !searchError && (
+                    <div className="rounded-xl border border-border/50 bg-secondary/40 px-4 py-6 text-sm text-muted-foreground">
+                      No connections match that search.
+                    </div>
+                  )}
+
+                  {filteredContacts.map((contact) => {
                     const isSelected = selectedContactIds.has(contact.id)
 
                     return (
                       <button
                         key={contact.id}
                         onClick={() => toggleContact(contact)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                          isSelected
-                            ? "border-primary bg-primary/10"
-                            : "border-border/50 hover:border-border hover:bg-card/50"
-                        }`}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border/50 hover:border-border hover:bg-card/50"
+                          }`}
                       >
                         <Avatar className="w-10 h-10">
                           <AvatarImage src={contact.photoUrl || undefined} alt={contact.name} />
@@ -629,11 +693,10 @@ export default function PublishPage() {
                           <div className="font-medium text-sm truncate">{contact.name}</div>
                           <div className="text-xs text-muted-foreground truncate">{contact.email}</div>
                         </div>
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                          isSelected
-                            ? "border-primary bg-primary"
-                            : "border-border"
-                        }`}>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isSelected
+                          ? "border-primary bg-primary"
+                          : "border-border"
+                          }`}>
                           {isSelected && <Check className="w-3 h-3 text-white" />}
                         </div>
                       </button>
@@ -671,18 +734,57 @@ export default function PublishPage() {
               )}
 
               {/* Selected count and send */}
-              <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                <span className="text-sm text-muted-foreground">
-                  {selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected
-                </span>
-                <Button 
-                  className="gradient-primary border-0 text-white"
-                  disabled={selectedContacts.length === 0}
-                  onClick={handleSendEmails}
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Send Invitations
-                </Button>
+              <div className="space-y-4">
+                {/* Email send status */}
+                {emailSendStatus && (
+                  <div className={`rounded-xl border p-4 space-y-2 ${
+                    emailSendStatus.failed === 0
+                      ? "border-green-500/20 bg-green-500/10"
+                      : "border-amber-500/20 bg-amber-500/10"
+                  }`}>
+                    <div className="text-sm font-medium">
+                      {emailSendStatus.failed === 0 ? (
+                        <span className="text-green-700 dark:text-green-400">✓ All emails sent successfully</span>
+                      ) : (
+                        <span className="text-amber-700 dark:text-amber-400">
+                          {emailSendStatus.success > 0 ? `✓ ${emailSendStatus.success} sent, ` : ''}
+                          ✗ {emailSendStatus.failed} failed
+                        </span>
+                      )}
+                    </div>
+                    {emailSendStatus.errors.length > 0 && (
+                      <div className="text-xs space-y-1 mt-2">
+                        {emailSendStatus.errors.map((err, idx) => (
+                          <div key={idx} className="text-amber-700 dark:text-amber-400">
+                            <strong>{err.email}:</strong> {err.error}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                  <span className="text-sm text-muted-foreground">
+                    {selectedContacts.length} contact{selectedContacts.length !== 1 ? 's' : ''} selected
+                  </span>
+                  <Button
+                    className="gradient-primary border-0 text-white"
+                    disabled={selectedContacts.length === 0 || isSendingEmails}
+                    onClick={handleSendEmails}
+                  >
+                    {isSendingEmails ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Send Invitations
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
           )}

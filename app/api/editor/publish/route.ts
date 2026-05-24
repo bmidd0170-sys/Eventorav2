@@ -110,6 +110,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    if (event.status === "published") {
+      return NextResponse.json(
+        {
+          error: "Invitation is already published",
+          eventId: body.eventId,
+          status: event.status,
+        },
+        { status: 409 }
+      )
+    }
+
     // Update status to published
     const updatedEvent = await prisma.event.update({
       where: { id: body.eventId },

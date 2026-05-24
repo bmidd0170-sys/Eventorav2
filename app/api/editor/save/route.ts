@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { jwtDecode } from "jwt-decode"
+import type { BrandSettings } from "@/lib/branding"
 
 type SaveRequest = {
   invitationId: string
@@ -8,6 +9,7 @@ type SaveRequest = {
   userId: string
   messages?: unknown[]
   title?: string
+  brand?: BrandSettings | null
 }
 
 export async function POST(req: NextRequest) {
@@ -94,6 +96,18 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const existingEvent = await prisma.event.findUnique({
+      where: { id: body.invitationId },
+      select: { pagesData: true, status: true },
+    })
+
+    const existingBrand =
+      existingEvent && !Array.isArray(existingEvent.pagesData) && existingEvent.pagesData && typeof existingEvent.pagesData === "object"
+        ? ((existingEvent.pagesData as { brand?: BrandSettings | null }).brand ?? null)
+        : null
+
+    const brandToSave = body.brand ?? existingBrand
+
     // Create or update the event with upsert using database user ID
     // Store pages and messages together in pagesData as an object
     // Transform pages to include 'type' field extracted from id
@@ -107,7 +121,11 @@ export async function POST(req: NextRequest) {
         content: page.content || {}
       }
     })
-    const pagesData = { pages: transformedPages, messages: body.messages ?? [] } as any
+    const pagesData = {
+      pages: transformedPages,
+      messages: body.messages ?? [],
+      brand: brandToSave,
+    } as any
     const titleToSave = (body.title && typeof body.title === 'string') ? body.title : "Untitled Event"
     const updatedEvent = await prisma.event.upsert({
       where: { id: body.invitationId },
@@ -123,7 +141,7 @@ export async function POST(req: NextRequest) {
       update: {
         title: titleToSave,
         pagesData: pagesData as any,
-        status: "draft",
+        status: existingEvent?.status ?? "draft",
         updatedAt: new Date()
       }
     })

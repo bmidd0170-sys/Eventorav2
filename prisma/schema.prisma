@@ -11,20 +11,20 @@ datasource db {
 }
 
 model User {
-  id                    String    @id @default(cuid())
-  firebaseUid           String    @unique
-  email                 String    @unique
-  displayName           String?
-  photoUrl              String?
-  hasCompletedTutorial  Boolean   @default(false)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id               String    @id @default(cuid())
+  firebaseUid      String    @unique
+  email            String    @unique
+  displayName      String?
+  photoUrl         String?
+  hasCompletedTutorial Boolean @default(false)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  events                Event[]
-  invitations           Invitation[]
-  guestLists            GuestList[]
-  notificationSettings  UserNotificationSettings?
-  socialConnections     SocialConnection[]
+  events           Event[]
+  invitations      Invitation[]
+  guestLists       GuestList[]
+  notificationSettings UserNotificationSettings?
+  socialConnections SocialConnection[]
   connectedSocialConnections SocialConnection[] @relation("ConnectedUser")
   connectionRequestsSent ConnectionRequest[] @relation("ConnectionRequestsSent")
   connectionRequestsReceived ConnectionRequest[] @relation("ConnectionRequestsReceived")
@@ -38,17 +38,12 @@ model UserNotificationSettings {
   userId                   String   @unique
   user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  emailWelcome             Boolean  @default(true)
-  emailTutorialComplete    Boolean  @default(true)
   emailRsvp                Boolean  @default(true)
   emailReminders           Boolean  @default(true)
   emailSecurity            Boolean  @default(true)
   emailMarketing           Boolean  @default(false)
-  emailConnectionsOutgoing Boolean  @default(true)
-  emailConnectionsIncoming Boolean  @default(true)
+  emailConnectionsRequests Boolean  @default(true)
   emailConnectionsAccepted Boolean  @default(true)
-  emailEventCancelled      Boolean  @default(true)
-  emailAppUpdates          Boolean  @default(true)
   pushRsvp                 Boolean  @default(true)
   pushReminders            Boolean  @default(true)
   pushTips                 Boolean  @default(false)

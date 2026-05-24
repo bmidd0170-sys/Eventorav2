@@ -1,29 +1,37 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { signOut, onAuthStateChanged, deleteUser, reauthenticateWithCredential, EmailAuthProvider, GoogleAuthProvider, reauthenticateWithPopup } from "firebase/auth"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import {
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  signOut,
+} from "firebase/auth"
 import { auth } from "@/lib/firebase"
+import { fetchWithAuth } from "@/lib/api-client"
 import { getUserNotificationSettings, saveUserNotificationSettings } from '@/lib/notifications'
 import { getCurrentUserProfile, saveCurrentUserProfile } from "@/lib/profile"
 import { type NotificationSettings } from "@/lib/notification-settings"
 import { getUserBranding, type BrandSettings as BrandKitSettings } from "@/lib/branding"
 import { useBrand } from "@/components/brand/brand-provider"
 import { useToast } from '@/hooks/use-toast'
-import {
-  getConnections,
-  getPendingRequests,
-  removeConnection,
-  blockUser,
-  acceptConnectionRequest,
-  rejectConnectionRequest,
-  searchUsers,
-  cancelConnectionRequest,
-  sendConnectionRequest,
-  type Connection,
-  type ConnectionRequest,
-} from "@/lib/connections"
+import { useConnectionsManager } from "@/components/connections/use-connections-manager"
+import { Input } from "@/components/ui/input"
 import { 
   User,
   Palette,
@@ -31,26 +39,14 @@ import {
   Shield,
   Upload,
   Camera,
-  Check,
   ChevronRight,
-  Plus,
   Trash2,
   LogOut,
   Users,
   Mail,
-  X
+  Check,
+  X,
 } from "lucide-react"
-import {
-  AlertDialog,
-  AlertDialogTrigger,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogAction,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog'
 
 type Tab = "profile" | "brand" | "notifications" | "privacy" | "connections"
 
@@ -111,6 +107,8 @@ function ProfileSettings() {
   const [email, setEmail] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -124,6 +122,7 @@ function ProfileSettings() {
       try {
         const profile = await getCurrentUserProfile()
         setName(profile.displayName || user.displayName || user.email?.split("@")[0] || "")
+        setPhotoUrl(profile.photoUrl || null)
       } catch {
         setName(user.displayName || user.email?.split("@")[0] || "")
       } finally {
@@ -147,20 +146,58 @@ function ProfileSettings() {
         {/* Avatar */}
         <div className="flex items-center gap-6 mb-8">
           <div className="relative">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary/30 to-accent/30 flex items-center justify-center">
-              <User className="w-8 h-8 text-muted-foreground" />
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-primary/30 to-accent/30 flex items-center justify-center">
+              {photoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoUrl} alt="Profile" className="w-full h-full object-cover" />
+              ) : (
+                <User className="w-8 h-8 text-muted-foreground" />
+              )}
             </div>
-            <button className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-lg hover:bg-primary/90 transition-smooth">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground shadow-lg hover:bg-primary/90 transition-smooth"
+            >
               <Camera className="w-4 h-4" />
             </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                if (file.size > 2 * 1024 * 1024) {
+                  toast({ title: "Error", description: "Image must be under 2MB", variant: "destructive" })
+                  return
+                }
+
+                const reader = new FileReader()
+                reader.onload = async (ev) => {
+                  const dataUrl = ev.target?.result as string
+                  setPhotoUrl(dataUrl)
+                  try {
+                    setSaving(true)
+                    await saveCurrentUserProfile({ photoUrl: dataUrl })
+                    toast({ title: "Saved", description: "Profile photo updated" })
+                  } catch (err) {
+                    console.error('Failed to upload profile photo', err)
+                    toast({ title: "Error", description: "Failed to save profile photo", variant: "destructive" })
+                  } finally {
+                    setSaving(false)
+                  }
+                }
+                reader.readAsDataURL(file)
+                e.currentTarget.value = ''
+              }}
+            />
           </div>
           <div>
             <p className="font-medium">Profile Photo</p>
             <p className="text-sm text-muted-foreground mb-2">JPG, PNG or GIF. Max 2MB.</p>
-            <Button variant="outline" size="sm" className="border-border/50">
-              <Upload className="w-4 h-4 mr-2" />
-              Upload
-            </Button>
+
           </div>
         </div>
 
@@ -238,6 +275,8 @@ function BrandSettings() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement | null>(null)
+  const [logoDataUrl, setLogoDataUrl] = useState<string | undefined>(undefined)
   const [colors, setColors] = useState([
     { id: "1", name: "Primary", value: "#9333ea" },
     { id: "2", name: "Secondary", value: "#ec4899" },
@@ -262,6 +301,7 @@ function BrandSettings() {
 
       try {
         const brand = await getUserBranding(user.uid)
+        setLogoDataUrl(brand.logoDataUrl)
         setColors([
           { id: "1", name: "Primary", value: brand.primaryColor || "#9333ea" },
           { id: "2", name: "Secondary", value: brand.secondaryColor || "#ec4899" },
@@ -321,8 +361,40 @@ function BrandSettings() {
       <section className="bg-card rounded-xl border border-border/50 p-6">
         <h2 className="text-lg font-medium mb-4">Brand Logo</h2>
         <div className="flex items-start gap-6">
-          <div className="w-32 h-32 rounded-xl border-2 border-dashed border-border/50 flex items-center justify-center bg-secondary/50">
-            <Upload className="w-8 h-8 text-muted-foreground" />
+          <div className="w-32 h-32 rounded-xl border-2 border-dashed border-border/50 flex items-center justify-center bg-secondary/50 overflow-hidden">
+            {logoDataUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={logoDataUrl} alt="Logo" className="w-full h-full object-contain p-2 bg-white" />
+            ) : (
+              <Upload className="w-8 h-8 text-muted-foreground" />
+            )}
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/*,image/svg+xml"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const reader = new FileReader()
+                reader.onload = async (ev) => {
+                  const dataUrl = ev.target?.result as string
+                  setLogoDataUrl(dataUrl)
+                  try {
+                    setSaving(true)
+                    await setBrand({ logoDataUrl: dataUrl })
+                    toast({ title: "Saved", description: "Logo uploaded" })
+                  } catch (err) {
+                    console.error('Failed to save logo', err)
+                    toast({ title: "Error", description: "Failed to save logo", variant: "destructive" })
+                  } finally {
+                    setSaving(false)
+                  }
+                }
+                reader.readAsDataURL(file)
+                e.currentTarget.value = ''
+              }}
+            />
           </div>
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
@@ -331,10 +403,37 @@ function BrandSettings() {
             <p className="text-xs text-muted-foreground">
               Recommended: 512x512px, PNG or SVG
             </p>
-            <Button variant="outline" size="sm" className="border-border/50 mt-2">
-              <Upload className="w-4 h-4 mr-2" />
-              Upload Logo
-            </Button>
+            <div className="flex gap-2 mt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-border/50"
+                onClick={() => logoInputRef.current?.click()}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Logo
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={async () => {
+                  setLogoDataUrl(undefined)
+                  try {
+                    setSaving(true)
+                    await setBrand({ logoDataUrl: undefined })
+                    toast({ title: "Removed", description: "Logo removed" })
+                  } catch (err) {
+                    console.error('Failed to remove logo', err)
+                    toast({ title: "Error", description: "Failed to remove logo", variant: "destructive" })
+                  } finally {
+                    setSaving(false)
+                  }
+                }}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Remove
+              </Button>
+            </div>
           </div>
         </div>
       </section>
@@ -343,10 +442,6 @@ function BrandSettings() {
       <section className="bg-card rounded-xl border border-border/50 p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-medium">Brand Colors</h2>
-          <Button variant="ghost" size="sm">
-            <Plus className="w-4 h-4 mr-1" />
-            Add Color
-          </Button>
         </div>
         <div className="space-y-3">
           {colors.map((color) => (
@@ -361,20 +456,10 @@ function BrandSettings() {
                 }}
                 className="w-10 h-10 rounded-lg cursor-pointer border-0"
               />
-              <input
-                type="text"
-                value={color.name}
-                onChange={(e) => {
-                  setColors(colors.map(c => 
-                    c.id === color.id ? { ...c, name: e.target.value } : c
-                  ))
-                }}
-                className="flex-1 bg-secondary rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
+              <div className="flex-1 bg-secondary rounded-lg px-4 py-2 text-sm text-foreground">
+                {color.name}
+              </div>
               <span className="text-sm text-muted-foreground font-mono w-20">{color.value}</span>
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                <Trash2 className="w-4 h-4" />
-              </Button>
             </div>
           ))}
         </div>
@@ -460,18 +545,6 @@ function NotificationSettings() {
           ) : (
             <>
               <ToggleSetting
-                label="Welcome Email"
-                description="Send a welcome message when someone creates an account"
-                checked={settings.emailWelcome}
-                onChange={(checked) => setSettings({ ...settings, emailWelcome: checked })}
-              />
-              <ToggleSetting
-                label="Tutorial Complete"
-                description="Send a message when a user finishes the tutorial"
-                checked={settings.emailTutorialComplete}
-                onChange={(checked) => setSettings({ ...settings, emailTutorialComplete: checked })}
-              />
-              <ToggleSetting
                 label="Security Alerts"
                 description="Receive emails for sign-ins and security events"
                 checked={settings.emailSecurity}
@@ -490,40 +563,22 @@ function NotificationSettings() {
                 onChange={(checked) => setSettings({ ...settings, emailReminders: checked })}
               />
               <ToggleSetting
-                label="Connection Requests Sent"
-                description="Receive a message after you send a request"
-                checked={settings.emailConnectionsOutgoing}
-                onChange={(checked) => setSettings({ ...settings, emailConnectionsOutgoing: checked })}
+                label="Product Updates"
+                description="Learn about new features and improvements"
+                checked={settings.emailMarketing}
+                onChange={(checked) => setSettings({ ...settings, emailMarketing: checked })}
               />
               <ToggleSetting
-                label="Connection Requests Received"
+                label="Connection Requests"
                 description="Receive emails when someone sends you a connection request"
-                checked={settings.emailConnectionsIncoming}
-                onChange={(checked) => setSettings({ ...settings, emailConnectionsIncoming: checked })}
+                checked={settings.emailConnectionsRequests}
+                onChange={(checked) => setSettings({ ...settings, emailConnectionsRequests: checked })}
               />
               <ToggleSetting
                 label="Connection Accepted"
                 description="Receive an email when a connection request is accepted"
                 checked={settings.emailConnectionsAccepted}
                 onChange={(checked) => setSettings({ ...settings, emailConnectionsAccepted: checked })}
-              />
-              <ToggleSetting
-                label="Event Canceled"
-                description="Notify guests when an event is canceled"
-                checked={settings.emailEventCancelled}
-                onChange={(checked) => setSettings({ ...settings, emailEventCancelled: checked })}
-              />
-              <ToggleSetting
-                label="App Updates"
-                description="Get product update emails when the app changes"
-                checked={settings.emailAppUpdates}
-                onChange={(checked) => setSettings({ ...settings, emailAppUpdates: checked })}
-              />
-              <ToggleSetting
-                label="Product Updates"
-                description="Learn about new features and improvements"
-                checked={settings.emailMarketing}
-                onChange={(checked) => setSettings({ ...settings, emailMarketing: checked })}
               />
             </>
           )}
@@ -602,246 +657,165 @@ function NotificationSettings() {
 }
 
 function ConnectionsSettings() {
-  const [connections, setConnections] = useState<Connection[]>([])
-  const [pendingIncoming, setPendingIncoming] = useState<ConnectionRequest[]>([])
-  const [pendingOutgoing, setPendingOutgoing] = useState<ConnectionRequest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
-  const [currentUserName, setCurrentUserName] = useState<string>("You")
+  const {
+    connections,
+    pendingRequests,
+    outgoingRequests,
+    loadingConnections,
+    loadingRequests,
+    loadingOutgoingRequests,
+    error,
+    currentUserId,
+    handleRemoveConnection,
+    handleBlockUser,
+    handleAcceptRequest,
+    handleRejectRequest,
+    refreshPendingRequests,
+    refreshOutgoingRequests,
+  } = useConnectionsManager({ includeOutgoingRequests: true })
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setCurrentUserId(user.uid)
-        setCurrentUserName(user.displayName || user.email?.split("@")[0] || "You")
-        loadConnections(user.uid)
-        loadPendingRequests(user.uid)
-      }
-    })
-
-    return () => unsubscribe()
-  }, [])
-
-  const loadConnections = async (userId: string) => {
-    try {
-      setLoading(true)
-      const data = await getConnections(userId)
-      setConnections(data)
-      setError(null)
-    } catch (err) {
-      console.error("Error loading connections:", err)
-      setError("Failed to load connections")
-    } finally {
-      setLoading(false)
+    if (!currentUserId) {
+      return
     }
-  }
 
-  const loadPendingRequests = async (userId: string) => {
-    try {
-      const data = await getPendingRequests(userId)
-      setPendingIncoming(data.incoming || [])
-      setPendingOutgoing(data.outgoing || [])
-    } catch (err) {
-      console.error("Error loading pending requests:", err)
-    }
-  }
+    const interval = window.setInterval(() => {
+      void refreshPendingRequests()
+      void refreshOutgoingRequests()
+    }, 15000)
 
-  const handleRemoveConnection = async (connectionId: string, connectedUserId: string) => {
-    try {
-      await removeConnection(currentUserId!, connectedUserId)
-      setConnections(connections.filter((c) => c.id !== connectionId))
-    } catch (err) {
-      console.error("Error removing connection:", err)
-      setError("Failed to remove connection")
-    }
-  }
+    return () => window.clearInterval(interval)
+  }, [currentUserId, refreshOutgoingRequests, refreshPendingRequests])
 
-  const handleBlockUser = async (
-    connectionId: string,
-    blockedUserId: string,
-    blockedUserName: string,
-    blockedUserEmail: string
-  ) => {
-    try {
-      await blockUser(currentUserId!, blockedUserId, blockedUserName, blockedUserEmail)
-      setConnections(connections.filter((c) => c.id !== connectionId))
-    } catch (err) {
-      console.error("Error blocking user:", err)
-      setError("Failed to block user")
-    }
-  }
-
-  const handleAcceptRequest = async (request: ConnectionRequest) => {
-    try {
-      await acceptConnectionRequest(
-        request.id,
-        request.fromUserId,
-        request.toUserId,
-        request.fromUserName,
-        currentUserName,
-        request.fromUserEmail,
-        auth.currentUser?.email || ""
-      )
-      setPendingIncoming((prev) => prev.filter((r: ConnectionRequest) => r.id !== request.id))
-      if (currentUserId) {
-        loadConnections(currentUserId)
-      }
-    } catch (err) {
-      console.error("Error accepting request:", err)
-      setError("Failed to accept connection request")
-    }
-  }
-
-  const handleRejectRequest = async (requestId: string) => {
-    try {
-      await rejectConnectionRequest(requestId)
-      setPendingIncoming((prev) => prev.filter((r: ConnectionRequest) => r.id !== requestId))
-    } catch (err) {
-      console.error("Error rejecting request:", err)
-      setError("Failed to reject connection request")
-    }
-  }
-
-  const handleCancelOutgoing = async (requestId: string) => {
-    try {
-      await cancelConnectionRequest(requestId)
-      setPendingOutgoing((prev) => prev.filter((r: ConnectionRequest) => r.id !== requestId))
-    } catch (err) {
-      console.error('Error cancelling outgoing request:', err)
-      setError('Failed to cancel outgoing request')
-    }
-  }
+  const hasRequests = pendingRequests.length > 0 || outgoingRequests.length > 0
+  const incomingLoading = loadingRequests
+  const outgoingLoading = loadingOutgoingRequests
 
   return (
     <div className="space-y-8">
       {error && (
-        <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4 text-destructive text-sm">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      {/* Pending Requests */}
-      <section className="bg-card rounded-xl border border-border/50 p-6">
-        <h2 className="text-lg font-medium mb-4">Connection Requests</h2>
-
-        {/* Incoming Requests */}
-        <div className="mb-4">
-          <h3 className="font-medium">Incoming ({pendingIncoming.length})</h3>
-          {pendingIncoming.length > 0 ? (
-            <div className="space-y-3 mt-3">
-              {pendingIncoming.map((request) => (
-                <div
-                  key={request.id}
-                  className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg border border-border/30"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{request.fromUserName}</p>
-                    <p className="text-sm text-muted-foreground truncate">{request.fromUserEmail}</p>
-                  </div>
-                  <div className="flex gap-2 ml-4">
-                    <Button
-                      size="sm"
-                      className="gradient-primary border-0 text-white"
-                      onClick={() => handleAcceptRequest(request)}
-                    >
-                      <Check className="w-4 h-4 mr-1" />
-                      Accept
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-border/50"
-                      onClick={() => handleRejectRequest(request.id)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-muted-foreground mt-2">No incoming requests</div>
-          )}
-        </div>
-
-        {/* Outgoing Requests */}
-        <div>
-          <h3 className="font-medium">Outgoing ({pendingOutgoing.length})</h3>
-          {pendingOutgoing.length > 0 ? (
-            <div className="space-y-3 mt-3">
-              {pendingOutgoing.map((request) => (
-                <div
-                  key={request.id}
-                  className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg border border-border/30"
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium truncate">{request.toUserName || request.toUserEmail || 'Recipient'}</p>
-                    <p className="text-sm text-muted-foreground truncate">{request.toUserEmail || ''}</p>
-                  </div>
-                  <div className="flex gap-2 ml-4 items-center">
-                    <div className="text-sm text-muted-foreground">Pending</div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-border/50"
-                      onClick={() => handleCancelOutgoing(request.id)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-muted-foreground mt-2">No outgoing requests</div>
-          )}
-        </div>
-      </section>
-
-      {/* Active Connections */}
-      <section className="bg-card rounded-xl border border-border/50 p-6">
-        <div className="flex items-center justify-between mb-4">
+      <section className="rounded-xl border border-border/50 bg-card p-6">
+        <div className="mb-4 flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-medium">Your Connections</h2>
-            <p className="text-sm text-muted-foreground">{connections.length} connection{connections.length !== 1 ? "s" : ""}</p>
+            <h2 className="text-lg font-medium">Connection Requests</h2>
+            <p className="text-sm text-muted-foreground">Pending requests you received or sent</p>
           </div>
         </div>
 
-        {loading ? (
+        <div className="space-y-6">
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-muted-foreground">Incoming ({pendingRequests.length})</h3>
+            </div>
+            {incomingLoading ? (
+              <p className="py-4 text-sm text-muted-foreground">Loading incoming requests...</p>
+            ) : pendingRequests.length > 0 ? (
+              <div className="space-y-3">
+                {pendingRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex items-center justify-between rounded-lg border border-border/30 bg-secondary/30 p-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{request.fromUserName}</p>
+                      <p className="truncate text-sm text-muted-foreground">{request.fromUserEmail}</p>
+                    </div>
+                    <div className="ml-4 flex gap-2">
+                      <Button size="sm" className="gradient-primary border-0 text-white" onClick={() => handleAcceptRequest(request)}>
+                        <Check className="mr-1 h-4 w-4" />
+                        Accept
+                      </Button>
+                      <Button size="sm" variant="outline" className="border-border/50" onClick={() => handleRejectRequest(request.id)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No incoming requests.</p>
+            )}
+          </div>
+
+          <div>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-muted-foreground">Outgoing ({outgoingRequests.length})</h3>
+            </div>
+            {outgoingLoading ? (
+              <p className="py-4 text-sm text-muted-foreground">Loading outgoing requests...</p>
+            ) : outgoingRequests.length > 0 ? (
+              <div className="space-y-3">
+                {outgoingRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex items-center justify-between rounded-lg border border-border/30 bg-secondary/30 p-4"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{request.fromUserName}</p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        Sent to {request.toUserName || request.toUserEmail || request.toUserId}
+                      </p>
+                    </div>
+                    <div className="ml-4 rounded-full border border-border/50 px-3 py-1 text-xs text-muted-foreground">
+                      Pending
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">No outgoing requests.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-border/50 bg-card p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-medium">Your Connections</h2>
+            <p className="text-sm text-muted-foreground">
+              {connections.length} connection{connections.length !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
+
+        {loadingConnections ? (
           <div className="flex items-center justify-center py-8">
             <p className="text-muted-foreground">Loading connections...</p>
           </div>
         ) : connections.length === 0 ? (
-          <div className="text-center py-8">
-            <Users className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+          <div className="py-8 text-center">
+            <Users className="mx-auto mb-3 h-12 w-12 text-muted-foreground/30" />
             <p className="text-muted-foreground">No connections yet</p>
-            <p className="text-sm text-muted-foreground/70 mt-1">
-              Start connecting with other users to collaborate
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground/70">Start connecting with other users to collaborate</p>
           </div>
         ) : (
           <div className="space-y-2">
             {connections.map((connection) => (
               <div
                 key={connection.id}
-                className="flex items-center justify-between p-4 bg-secondary/30 rounded-lg border border-border/30 hover:border-border/50 transition-colors"
+                className="flex items-center justify-between rounded-lg border border-border/30 bg-secondary/30 p-4 transition-colors hover:border-border/50"
               >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{connection.connectedUserName}</p>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground truncate">
-                    <Mail className="w-4 h-4 flex-shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{connection.connectedUserName}</p>
+                  <div className="flex items-center gap-2 truncate text-sm text-muted-foreground">
+                    <Mail className="h-4 w-4 flex-shrink-0" />
                     <span className="truncate">{connection.connectedUserEmail}</span>
                   </div>
                 </div>
-                <div className="flex gap-2 ml-4 flex-shrink-0">
+                <div className="ml-4 flex flex-shrink-0 gap-2">
                   <Button
                     size="sm"
                     variant="outline"
                     className="border-destructive/30 text-destructive hover:bg-destructive/10"
                     onClick={() => handleRemoveConnection(connection.id, connection.connectedUserId)}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                   <Button
                     size="sm"
@@ -864,7 +838,6 @@ function ConnectionsSettings() {
           </div>
         )}
       </section>
-
     </div>
   )
 }
@@ -872,92 +845,160 @@ function ConnectionsSettings() {
 function PrivacySettings() {
   const router = useRouter()
   const { toast } = useToast()
-
+  const recentLoginWindowMs = 5 * 60 * 1000
   const [settings, setSettings] = useState({
     profilePublic: false,
     showActivity: true,
     allowAnalytics: true,
     // twoFactor removed per request
   })
-
-  const [deleting, setDeleting] = useState(false)
-  const [reauthNeeded, setReauthNeeded] = useState(false)
-  const [reauthLoading, setReauthLoading] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [reauthDialogOpen, setReauthDialogOpen] = useState(false)
   const [reauthPassword, setReauthPassword] = useState("")
   const [reauthError, setReauthError] = useState<string | null>(null)
-  const [serverDeleted, setServerDeleted] = useState(false)
+  const [reauthLoading, setReauthLoading] = useState(false)
+  const [deletingAccount, setDeletingAccount] = useState(false)
 
-  async function handleDeleteAccount() {
-    if (!auth.currentUser) {
-      toast({ title: 'Error', description: 'You must be signed in to delete your account', variant: 'destructive' })
-      return
-    }
-    setDeleting(true)
-    try {
-      // Only call server delete once
-      if (!serverDeleted) {
-        const idToken = await auth.currentUser.getIdToken(true)
-        const res = await fetch('/api/account/delete', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-          },
-        })
-
-        if (!res.ok) {
-          const text = await res.text()
-          throw new Error(text || 'Failed to delete account on server')
-        }
-
-        setServerDeleted(true)
-      }
-
-      // Now delete the Firebase Auth user (requires recent login)
-      await deleteUser(auth.currentUser)
-
-      toast({ title: 'Account deleted', description: 'Your account and data have been removed' })
-      router.push('/')
-    } catch (err: any) {
-      console.error('Failed to delete account', err)
-      const code = err?.code
-      if (code === 'auth/requires-recent-login' || code === 'auth/user-token-expired') {
-        setReauthNeeded(true)
-        return
-      }
-
-      const message = err?.message || 'Failed to delete account'
-      toast({ title: 'Error', description: message, variant: 'destructive' })
-    } finally {
-      setDeleting(false)
-    }
+  function isRecentLoginError(error: unknown) {
+    return error instanceof Error && error.message.includes("auth/requires-recent-login")
   }
 
-  async function deleteAuthUserAndRedirect() {
-    if (!auth.currentUser) return
-    try {
-      await deleteUser(auth.currentUser)
-      toast({ title: 'Account deleted', description: 'Your account and data have been removed' })
-      router.push('/')
-    } catch (err: any) {
-      console.error('Failed to delete auth user after reauth', err)
-      toast({ title: 'Error', description: err?.message || 'Failed to delete auth user', variant: 'destructive' })
+  function needsReauthentication() {
+    const currentUser = auth.currentUser
+    if (!currentUser?.metadata.lastSignInTime) {
+      return true
     }
+
+    const lastSignInAt = new Date(currentUser.metadata.lastSignInTime).getTime()
+    if (Number.isNaN(lastSignInAt)) {
+      return true
+    }
+
+    return Date.now() - lastSignInAt > recentLoginWindowMs
+  }
+
+  async function deleteFirebaseUser() {
+    const currentUser = auth.currentUser
+    if (!currentUser) {
+      throw new Error("No authenticated user found")
+    }
+
+    await currentUser.delete()
   }
 
   async function retryDeleteAccountAfterReauth() {
-    if (!auth.currentUser) return
-    setDeleting(true)
     try {
-      // Retry deleting the Firebase Auth user after successful reauthentication
-      await deleteUser(auth.currentUser)
-      toast({ title: 'Account deleted', description: 'Your account and data have been removed' })
-      router.push('/')
-    } catch (err: any) {
-      console.error('Failed to delete account after reauthentication', err)
-      const message = err?.message || 'Failed to delete account'
-      toast({ title: 'Error', description: message, variant: 'destructive' })
+      setReauthLoading(true)
+      setReauthError(null)
+
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        throw new Error("No authenticated user found")
+      }
+
+      const usesGoogle = currentUser.providerData.some((provider) => provider.providerId === "google.com")
+
+      if (usesGoogle) {
+        const provider = new GoogleAuthProvider()
+        await reauthenticateWithPopup(currentUser, provider)
+      } else {
+        if (!reauthPassword.trim()) {
+          throw new Error("Enter your password to continue")
+        }
+
+        if (!currentUser.email) {
+          throw new Error("Your account does not have an email address for password reauthentication")
+        }
+
+        const credential = EmailAuthProvider.credential(currentUser.email, reauthPassword)
+        await reauthenticateWithCredential(currentUser, credential)
+      }
+
+      await deleteFirebaseUser()
+      await signOut(auth)
+      setReauthDialogOpen(false)
+      setDeleteDialogOpen(false)
+      setReauthPassword("")
+      toast({
+        title: "Account deleted",
+        description: "Your account and stored data have been removed.",
+      })
+      router.push("/")
+    } catch (error) {
+      console.error("Failed to delete account after reauth", error)
+      setReauthError(error instanceof Error ? error.message : "Unable to reauthenticate right now.")
     } finally {
-      setDeleting(false)
+      setReauthLoading(false)
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deletingAccount) {
+      return
+    }
+
+    setDeletingAccount(true)
+
+    try {
+      const response = await fetchWithAuth("/api/account/delete", {
+        method: "POST",
+      })
+
+      if (!response.ok) {
+        let message = "Failed to delete account"
+
+        try {
+          const payload = await response.json()
+          if (typeof payload?.error === "string") {
+            message = payload.error
+          }
+        } catch {
+          // Keep the default message when the response is not JSON.
+        }
+
+        throw new Error(message)
+      }
+
+      const payload = (await response.json().catch(() => null)) as { firebaseAuthDeletionSkipped?: boolean } | null
+
+      if (payload?.firebaseAuthDeletionSkipped) {
+        if (needsReauthentication()) {
+          setReauthPassword("")
+          setReauthError(null)
+          setReauthDialogOpen(true)
+          return
+        }
+
+        try {
+          await deleteFirebaseUser()
+        } catch (error) {
+          if (isRecentLoginError(error)) {
+            setReauthPassword("")
+            setReauthError(null)
+            setReauthDialogOpen(true)
+            return
+          }
+
+          throw error
+        }
+      }
+
+      await signOut(auth)
+      setDeleteDialogOpen(false)
+      toast({
+        title: "Account deleted",
+        description: "Your account and stored data have been removed.",
+      })
+      router.push("/")
+    } catch (error) {
+      console.error("Failed to delete account", error)
+      toast({
+        title: "Delete failed",
+        description: error instanceof Error ? error.message : "Unable to delete your account right now.",
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingAccount(false)
     }
   }
 
@@ -993,11 +1034,9 @@ function PrivacySettings() {
           {/* Two-Factor and Active Sessions removed per request */}
 
           <div className="pt-4 border-t border-border/50">
-            <AlertDialog>
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
               <AlertDialogTrigger asChild>
-                <button
-                  className="flex items-center justify-between w-full py-2 text-left group"
-                >
+                <button className="flex items-center justify-between w-full py-2 text-left group">
                   <div>
                     <p className="font-medium text-destructive">Delete Account</p>
                     <p className="text-sm text-muted-foreground">Permanently delete your account and all data</p>
@@ -1005,118 +1044,72 @@ function PrivacySettings() {
                   <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-destructive transition-smooth" />
                 </button>
               </AlertDialogTrigger>
-
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete your account?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will permanently delete your account and all associated data. This action cannot be undone. Are you sure you want to proceed?
+                    This will permanently remove your account and associated data. This action cannot be undone.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel disabled={deletingAccount}>Cancel</AlertDialogCancel>
                   <AlertDialogAction
-                    onClick={handleDeleteAccount}
-                    className="border-destructive/30 text-destructive"
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void handleDeleteAccount()
+                    }}
+                    disabled={deletingAccount}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {deleting ? 'Deleting…' : 'Delete Account'}
+                    {deletingAccount ? "Deleting…" : "Delete Account"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={reauthDialogOpen} onOpenChange={setReauthDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reauthenticate to delete your account</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Firebase needs to confirm it is really you before the account can be removed.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-4">
+                  {auth.currentUser?.providerData.some((provider) => provider.providerId === "google.com") ? (
+                    <p className="text-sm text-muted-foreground">
+                      Continue with Google to confirm the deletion.
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Password</label>
+                      <Input
+                        type="password"
+                        value={reauthPassword}
+                        onChange={(event) => setReauthPassword(event.target.value)}
+                        placeholder="Enter your password"
+                        disabled={reauthLoading}
+                      />
+                    </div>
+                  )}
+                  {reauthError ? <p className="text-sm text-destructive">{reauthError}</p> : null}
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={reauthLoading}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(event) => {
+                      event.preventDefault()
+                      void retryDeleteAccountAfterReauth()
+                    }}
+                    disabled={reauthLoading}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {reauthLoading ? "Confirming…" : "Confirm Delete"}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           </div>
-
-          {/* Reauthentication modal shown when token expired or recent-login required */}
-          <AlertDialog 
-            open={reauthNeeded} 
-            onOpenChange={(open) => {
-              setReauthNeeded(open)
-              if (!open) {
-                // Clear modal state when closing
-                setReauthPassword('')
-                setReauthError(null)
-              }
-            }}
-          >
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Re-authenticate to continue</AlertDialogTitle>
-                <AlertDialogDescription>
-                  For your security, please re-enter your credentials to confirm account deletion.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-
-              <div className="mt-4 space-y-3">
-                <label className="text-sm block mb-2">Password</label>
-                <input
-                  type="password"
-                  value={reauthPassword}
-                  onChange={(e) => setReauthPassword(e.target.value)}
-                  className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                {reauthError && <p className="text-sm text-destructive mt-2">{reauthError}</p>}
-              </div>
-
-              {/* Offer Google re-auth if current user signed in with Google */}
-              {auth.currentUser?.providerData?.some((p) => p.providerId === 'google.com') && (
-                <div className="mt-2">
-                  <p className="text-sm text-muted-foreground mb-2">Or re-sign in with Google</p>
-                  <button
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-border/50 px-3 py-2 text-sm disabled:opacity-50"
-                    disabled={reauthLoading}
-                    onClick={async () => {
-                      try {
-                        setReauthLoading(true)
-                        const provider = new GoogleAuthProvider()
-                        await reauthenticateWithPopup(auth.currentUser!, provider)
-                        setReauthNeeded(false)
-                        setReauthPassword('')
-                        setReauthError(null)
-                        // Retry deletion after successful reauthentication
-                        await retryDeleteAccountAfterReauth()
-                      } catch (e: any) {
-                        console.error('Google reauth failed', e)
-                        setReauthError(e?.message || 'Google reauthentication failed')
-                      } finally {
-                        setReauthLoading(false)
-                      }
-                    }}
-                  >
-                    Continue with Google
-                  </button>
-                </div>
-              )}
-
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setReauthNeeded(false)}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    disabled={reauthLoading}
-                    onClick={async () => {
-                      if (!auth.currentUser) return
-                      setReauthLoading(true)
-                      setReauthError(null)
-                      try {
-                        const email = auth.currentUser.email || ''
-                        const cred = EmailAuthProvider.credential(email, reauthPassword)
-                        await reauthenticateWithCredential(auth.currentUser, cred)
-                        setReauthNeeded(false)
-                        setReauthPassword('')
-                        // Retry deletion after successful reauthentication
-                        await retryDeleteAccountAfterReauth()
-                      } catch (e: any) {
-                        console.error('Reauth failed', e)
-                        setReauthError(e?.message || 'Failed to reauthenticate')
-                      } finally {
-                        setReauthLoading(false)
-                      }
-                    }}
-                  >
-                    {reauthLoading ? 'Reauthenticating…' : 'Re-authenticate'}
-                  </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </div>
       </section>
     </div>

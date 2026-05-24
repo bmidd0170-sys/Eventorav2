@@ -1,4 +1,4 @@
-# Eventorav2
+# Invyra
 
 ## Commands
 

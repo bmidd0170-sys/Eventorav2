@@ -34,7 +34,7 @@ export async function getUserBranding(userId: string): Promise<BrandSettings> {
   try {
     if (typeof window === 'undefined') return {}
 
-    const raw = localStorage.getItem(`eventora:brand-settings:${userId}`)
+    const raw = localStorage.getItem(`invyra:brand-settings:${userId}`)
     if (!raw) return {}
 
     return JSON.parse(raw) as BrandSettings
@@ -48,7 +48,7 @@ export async function saveUserBranding(userId: string, settings: Partial<BrandSe
   try {
     if (typeof window === 'undefined') return
 
-    const key = `eventora:brand-settings:${userId}`
+    const key = `invyra:brand-settings:${userId}`
     const existing = await getUserBranding(userId)
     const next = {
       ...existing,
@@ -75,7 +75,7 @@ export function applyBrandSettingsToPages(pages: InvitationPage[], brand: BrandS
     content: {
       ...page.content,
       // Apply brand default headline if generic
-      headline: 
+      headline:
         page.content.headline === "You're Invited" && brand.defaultHeadline
           ? brand.defaultHeadline
           : page.content.headline,
@@ -87,7 +87,7 @@ export function applyBrandSettingsToPages(pages: InvitationPage[], brand: BrandS
       // Apply brand default CTA labels to buttons
       buttons: page.content.buttons?.map((btn) => ({
         ...btn,
-        label: 
+        label:
           (btn.label === "Submit RSVP" || btn.label === "Confirm Attendance" || btn.label === "Save My Spot" || btn.label === "Register") && brand.defaultCtaLabel
             ? brand.defaultCtaLabel
             : btn.label,

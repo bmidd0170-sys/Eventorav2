@@ -33,8 +33,8 @@ import {
 import type { InvitationSummary } from "@/lib/invitations"
 import type { Guest } from "@/lib/guest-lists"
 
-export function GuestListPage({ invitation, guests }: { invitation: InvitationSummary; guests: Guest[] }) {
-    const isPublished = invitation.status === "active"
+export function GuestListPage({ invitation, guests, canManagePublication = true }: { invitation: InvitationSummary; guests: Guest[]; canManagePublication?: boolean }) {
+    const [currentStatus, setCurrentStatus] = useState(invitation.status)
     const [searchQuery, setSearchQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [selectedGuests, setSelectedGuests] = useState<string[]>([])
@@ -42,6 +42,9 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
     const [newInviteEmail, setNewInviteEmail] = useState("")
     const [isSendingInvites, setIsSendingInvites] = useState(false)
     const [inviteStatus, setInviteStatus] = useState<string | null>(null)
+    const [publishStatus, setPublishStatus] = useState<string | null>(null)
+    const [isTogglingPublish, setIsTogglingPublish] = useState(false)
+    const isPublished = currentStatus === "active"
     const [eventDate, setEventDate] = useState(() => (isPublished ? invitation.date : ""))
     const [eventTime, setEventTime] = useState(() => (isPublished ? invitation.time : ""))
     const [isEditingSchedule, setIsEditingSchedule] = useState(false)
@@ -87,6 +90,46 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
 
     const removeInviteEmail = (email: string) => {
         setInviteEmails((previous) => previous.filter((value) => value !== email))
+    }
+
+    const handleUnpublish = async () => {
+        if (!isPublished || !canManagePublication || isTogglingPublish) {
+            return
+        }
+
+        try {
+            setIsTogglingPublish(true)
+            setPublishStatus(null)
+
+            const user = auth.currentUser
+            if (!user) {
+                setPublishStatus("You need to sign in again before unpublishing this event.")
+                return
+            }
+
+            const token = await user.getIdToken()
+            const response = await fetch("/api/events/unpublish", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ eventId: invitation.id }),
+            })
+
+            if (!response.ok) {
+                setPublishStatus("Unable to unpublish right now. Please try again.")
+                return
+            }
+
+            setCurrentStatus("draft")
+            setPublishStatus("Event unpublished and connected users notified.")
+        } catch (error) {
+            console.error("Failed to unpublish event:", error)
+            setPublishStatus("Something went wrong while unpublishing this event.")
+        } finally {
+            setIsTogglingPublish(false)
+        }
     }
 
     const handleSendInvites = async () => {
@@ -241,18 +284,38 @@ export function GuestListPage({ invitation, guests }: { invitation: InvitationSu
                                 <p className="text-sm font-medium text-muted-foreground">Invite more people</p>
                                 <h2 className="mt-1 text-xl font-semibold tracking-tight">Send new invitations from this page</h2>
                             </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="rounded-xl border-border/60 bg-background/40 backdrop-blur hover:bg-secondary"
-                                asChild
-                            >
-                                <Link href={`/publish?event=${encodeURIComponent(invitation.id)}&title=${encodeURIComponent(invitation.title)}`}>
-                                    Open publish flow
-                                </Link>
-                            </Button>
+                            <div className="flex flex-wrap gap-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="rounded-xl border-border/60 bg-background/40 backdrop-blur hover:bg-secondary"
+                                    asChild
+                                >
+                                    <Link href={`/publish?event=${encodeURIComponent(invitation.id)}&title=${encodeURIComponent(invitation.title)}`}>
+                                        Open publish flow
+                                    </Link>
+                                </Button>
+                                {isPublished && canManagePublication && (
+                                    <Button
+                                        type="button"
+                                        variant="destructive"
+                                        size="sm"
+                                        className="rounded-xl"
+                                        disabled={isTogglingPublish}
+                                        onClick={handleUnpublish}
+                                    >
+                                        {isTogglingPublish ? "Unpublishing…" : "Unpublish event"}
+                                    </Button>
+                                )}
+                            </div>
                         </div>
+
+                        {publishStatus && (
+                            <p className={`mt-4 text-sm ${publishStatus.includes("notified") ? "text-emerald-500" : "text-muted-foreground"}`}>
+                                {publishStatus}
+                            </p>
+                        )}
 
                         <div className="mt-5 flex flex-col gap-3 sm:flex-row">
                             <Input

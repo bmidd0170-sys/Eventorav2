@@ -1,5 +1,9 @@
+"use client"
+
+import { useEffect } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, Sparkles } from 'lucide-react'
+import { LegalPageKey, markLegalPageRead } from '@/lib/legal-read'
 
 type LegalSection = {
   title: string
@@ -8,6 +12,7 @@ type LegalSection = {
 }
 
 type LegalPageProps = {
+  legalKey: LegalPageKey
   title: string
   subtitle: string
   effectiveDate: string
@@ -19,6 +24,7 @@ type LegalPageProps = {
 }
 
 export function LegalPage({
+  legalKey,
   title,
   subtitle,
   effectiveDate,
@@ -28,6 +34,27 @@ export function LegalPage({
   sidebarTitle,
   sidebarItems,
 }: LegalPageProps) {
+  useEffect(() => {
+    const checkReadProgress = () => {
+      const doc = document.documentElement
+      const maxScrollTop = Math.max(doc.scrollHeight - window.innerHeight, 0)
+      const scrolledToBottom = window.scrollY >= maxScrollTop - 80
+
+      if (scrolledToBottom) {
+        markLegalPageRead(legalKey)
+      }
+    }
+
+    checkReadProgress()
+    window.addEventListener('scroll', checkReadProgress, { passive: true })
+    window.addEventListener('resize', checkReadProgress)
+
+    return () => {
+      window.removeEventListener('scroll', checkReadProgress)
+      window.removeEventListener('resize', checkReadProgress)
+    }
+  }, [legalKey])
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,oklch(0.55_0.25_280/0.16),transparent_35%),radial-gradient(circle_at_top_right,oklch(0.70_0.20_330/0.14),transparent_30%),linear-gradient(to_bottom,transparent,oklch(0.13_0.01_270))]" />
@@ -39,7 +66,7 @@ export function LegalPage({
           </Link>
           <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur md:inline-flex">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            Eventora legal center
+            Invyra legal center
           </div>
         </div>
 

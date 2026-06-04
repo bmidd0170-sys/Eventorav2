@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { getAuthenticatedDbUser } from "@/lib/api-auth"
 import { defaultNotificationSettings, type NotificationSettings } from "@/lib/notification-settings"
+import { sendEmail } from "@/lib/email"
 
 function serializeConnection(connection: {
   id: string
@@ -109,21 +110,13 @@ async function getNotificationEmailSettings(userId: string) {
   return stored ? { ...defaultNotificationSettings, ...stored } : defaultNotificationSettings
 }
 
-async function sendEmailViaRoute(req: NextRequest, mail: { to: string; subject: string; text?: string; html?: string; fromName?: string }) {
-  await fetch(new URL("/api/send-email", req.url), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(mail),
-  })
-}
-
-async function sendEmailIfAllowed(req: NextRequest, userId: string, settingKey: keyof NotificationSettings, mail: { to: string; subject: string; text?: string; html?: string; fromName?: string }) {
+async function sendEmailIfAllowed(userId: string, settingKey: keyof NotificationSettings, mail: { to: string; subject: string; text?: string; html?: string; fromName?: string }) {
   const settings = await getNotificationEmailSettings(userId)
   if (!settings[settingKey]) {
     return false
   }
 
-  await sendEmailViaRoute(req, mail)
+  await sendEmail(mail)
   return true
 }
 
@@ -152,18 +145,8 @@ export async function GET(req: NextRequest) {
 
     if (view === "outgoing-requests") {
       const requests = await prisma.connectionRequest.findMany({
-        where: {
-          fromUserId: authUser.dbUser.id,
-          status: "pending",
-        },
-        include: {
-          toUser: {
-            select: {
-              displayName: true,
-              email: true,
-            },
-          },
-        },
+        where: { fromUserId: authUser.dbUser.id, status: "pending" },
+        include: { toUser: { select: { displayName: true, email: true } } },
         orderBy: { updatedAt: "desc" },
       })
 
@@ -171,8 +154,8 @@ export async function GET(req: NextRequest) {
         requests: requests.map((request) =>
           serializeRequest({
             ...request,
-            toUserName: request.toUser.displayName || request.toUser.email,
-            toUserEmail: request.toUser.email,
+            toUserName: request.toUser?.displayName || request.toUser?.email || null,
+            toUserEmail: request.toUser?.email ?? null,
           })
         ),
       })
@@ -269,7 +252,7 @@ export async function POST(req: NextRequest) {
       })
 
       try {
-        await sendEmailIfAllowed(req, recipient.id, "emailConnectionsRequests", {
+        await sendEmailIfAllowed(recipient.id, "emailConnectionsRequests", {
           to: recipient.email,
           subject: `${request.fromUserName} sent you a connection request on Invyra`,
           text: `${request.fromUserName} (${request.fromUserEmail}) wants to connect with you on Invyra.`,
@@ -360,14 +343,14 @@ export async function POST(req: NextRequest) {
 
       try {
         await Promise.all([
-          sendEmailIfAllowed(req, authUser.dbUser.id, "emailConnectionsAccepted", {
+          sendEmailIfAllowed(authUser.dbUser.id, "emailConnectionsAccepted", {
             to: authUser.dbUser.email,
             subject: `You accepted ${sender.displayName || sender.email}'s connection request`,
             text: `You accepted ${sender.displayName || sender.email}'s connection request on Invyra.`,
             html: `<p>You accepted <strong>${sender.displayName || sender.email}</strong>'s connection request on <strong>Invyra</strong>.</p>`,
             fromName: "Invyra",
           }),
-          sendEmailIfAllowed(req, sender.id, "emailConnectionsAccepted", {
+          sendEmailIfAllowed(sender.id, "emailConnectionsAccepted", {
             to: sender.email,
             subject: `${authUser.dbUser.displayName || authUser.dbUser.email} accepted your connection request`,
             text: `${authUser.dbUser.displayName || authUser.dbUser.email} accepted your connection request on Invyra.`,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { jwtDecode } from "jwt-decode"
 import { randomBytes } from "crypto"
+import { sendEmail } from "@/lib/email"
 
 export async function POST(req: NextRequest) {
   try {
@@ -96,30 +97,13 @@ export async function POST(req: NextRequest) {
           <p><a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">View Invitation</a></p>
         `
 
-        const emailResponse = await fetch(`${appUrl}/api/send-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: email,
-            subject: subject || "You're Invited!",
-            text: `${message || "You're invited!"}\n\n${inviteUrl}`,
-            html: htmlEmail,
-            fromName: event.title,
-          }),
+        await sendEmail({
+          to: email,
+          subject: subject || "You're Invited!",
+          text: `${message || "You're invited!"}\n\n${inviteUrl}`,
+          html: htmlEmail,
+          fromName: event.title,
         })
-
-        if (!emailResponse.ok) {
-          const responseText = await emailResponse.text().catch(() => "")
-          const errorData = responseText ? (() => {
-            try {
-              return JSON.parse(responseText) as { error?: string; details?: string }
-            } catch {
-              return null
-            }
-          })() : null
-          const errorMsg = errorData?.details || errorData?.error || responseText || 'Email API returned an error'
-          throw new Error(errorMsg)
-        }
 
         emailResults.push({ email, success: true })
         console.log(`[/api/invitations/send] Successfully sent email to ${email}`)

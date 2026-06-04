@@ -1,4 +1,5 @@
 import { fetchWithAuth } from "@/lib/api-client"
+import { getFriendlyResponseMessage } from "@/lib/error-utils"
 
 export interface Connection {
     id: string;
@@ -31,7 +32,7 @@ export async function getConnections(userId: string): Promise<Connection[]> {
     try {
         const response = await fetchWithAuth('/api/connections?view=connections');
         if (!response.ok) {
-            throw new Error('Failed to load connections');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not load your connections right now.'));
         }
 
         const data = (await response.json()) as { connections: Connection[] };
@@ -49,7 +50,7 @@ export async function getPendingRequests(userId: string): Promise<ConnectionRequ
     try {
         const response = await fetchWithAuth('/api/connections?view=requests');
         if (!response.ok) {
-            throw new Error('Failed to load pending requests');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not load pending requests right now.'));
         }
 
         const data = (await response.json()) as { requests: ConnectionRequest[] };
@@ -67,7 +68,7 @@ export async function getOutgoingRequests(userId: string): Promise<ConnectionReq
     try {
         const response = await fetchWithAuth('/api/connections?view=outgoing-requests');
         if (!response.ok) {
-            throw new Error('Failed to load outgoing requests');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not load outgoing requests right now.'));
         }
 
         const data = (await response.json()) as { requests: ConnectionRequest[] };
@@ -98,7 +99,7 @@ export async function sendConnectionRequest(
         });
 
         if (!response.ok) {
-            throw new Error('Failed to send connection request');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not send the connection request right now.'));
         }
 
         const data = (await response.json()) as { request: ConnectionRequest };
@@ -128,7 +129,7 @@ export async function acceptConnectionRequest(
         });
 
         if (!response.ok) {
-            throw new Error('Failed to accept connection request');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not accept that connection request right now.'));
         }
     } catch (error) {
         console.error('Error accepting connection request:', error);
@@ -147,7 +148,7 @@ export async function rejectConnectionRequest(requestId: string): Promise<void> 
         });
 
         if (!response.ok) {
-            throw new Error('Failed to reject connection request');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not reject that connection request right now.'));
         }
     } catch (error) {
         console.error('Error rejecting connection request:', error);
@@ -169,7 +170,7 @@ export async function removeConnection(
         });
 
         if (!response.ok) {
-            throw new Error('Failed to remove connection');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not remove that connection right now.'));
         }
     } catch (error) {
         console.error('Error removing connection:', error);
@@ -198,7 +199,7 @@ export async function blockUser(
         });
 
         if (!response.ok) {
-            throw new Error('Failed to block user');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not block that user right now.'));
         }
     } catch (error) {
         console.error('Error blocking user:', error);
@@ -220,7 +221,7 @@ export async function unblockUser(userId: string, blockedUserId: string): Promis
         });
 
         if (!response.ok) {
-            throw new Error('Failed to unblock user');
+            throw new Error(await getFriendlyResponseMessage(response, 'We could not unblock that user right now.'));
         }
     } catch (error) {
         console.error('Error unblocking user:', error);

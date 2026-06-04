@@ -279,9 +279,9 @@ export default function GetStartedPage() {
                     />
                     <Label htmlFor="terms" className="text-sm font-normal cursor-pointer leading-tight">
                       I agree to the{" "}
-                      <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
+                      <Link href={{ pathname: '/terms', query: { returnTo: '/get-started' } }} className="text-primary hover:underline">Terms of Service</Link>
                       {" "}and{" "}
-                      <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+                      <Link href={{ pathname: '/privacy', query: { returnTo: '/get-started' } }} className="text-primary hover:underline">Privacy Policy</Link>
                     </Label>
                   </div>
                 </div>

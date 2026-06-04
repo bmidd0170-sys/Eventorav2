@@ -3,7 +3,7 @@ import { auth } from "@/lib/firebase"
 export async function fetchWithAuth(input: RequestInfo | URL, init: RequestInit = {}) {
   const user = auth.currentUser
   if (!user) {
-    throw new Error("You must be signed in")
+    throw new Error("Please sign in again to continue.")
   }
 
   const token = await user.getIdToken()

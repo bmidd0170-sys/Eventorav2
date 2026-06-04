@@ -4,6 +4,7 @@ import { Inter, Poppins } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 import { BrandProvider } from '@/components/brand/brand-provider'
+import { Toaster } from '@/components/ui/toaster'
 
 const inter = Inter({
   subsets: ["latin"],
@@ -56,6 +57,7 @@ export default function RootLayout({
         <BrandProvider>
           {children}
         </BrandProvider>
+        <Toaster />
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

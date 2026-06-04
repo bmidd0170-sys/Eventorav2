@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { getFriendlyErrorMessage } from '@/lib/error-utils'
 
 const signupSchema = z
   .object({
@@ -74,7 +75,7 @@ export function SignupForm() {
       }
       router.push('/(app)/dashboard');
     } catch (error: any) {
-      const errorMessage = error?.message || 'Failed to create account';
+      const errorMessage = getFriendlyErrorMessage(error, 'We could not create your account right now.');
       toast({
         title: 'Error',
         description: errorMessage,

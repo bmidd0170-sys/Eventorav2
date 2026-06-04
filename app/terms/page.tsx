@@ -1,12 +1,22 @@
 import type { Metadata } from 'next'
 import { LegalPage } from '@/components/legal/legal-page'
+import { getLegalBackTarget } from '@/lib/legal-navigation'
 
 export const metadata: Metadata = {
   title: 'Terms of Service - Invyra',
   description: 'Invyra Terms of Service',
 }
 
-export default function TermsPage() {
+type TermsPageProps = {
+  searchParams?: Promise<{
+    returnTo?: string | string[]
+  }>
+}
+
+export default async function TermsPage({ searchParams }: TermsPageProps) {
+  const resolvedSearchParams = await searchParams
+  const backTarget = getLegalBackTarget(resolvedSearchParams?.returnTo)
+
   return (
     <LegalPage
       legalKey="terms"
@@ -22,6 +32,8 @@ export default function TermsPage() {
         'AI output should always be reviewed before publishing or sending',
         'Subscriptions, service availability, and pricing may change with notice',
       ]}
+      backHref={backTarget.href}
+      backLabel={backTarget.label}
       sections={[
         {
           title: '1. About Invyra',

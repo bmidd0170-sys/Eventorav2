@@ -1,12 +1,22 @@
 import type { Metadata } from 'next'
 import { LegalPage } from '@/components/legal/legal-page'
+import { getLegalBackTarget } from '@/lib/legal-navigation'
 
 export const metadata: Metadata = {
   title: 'Privacy Policy - Invyra',
   description: 'Invyra Privacy Policy',
 }
 
-export default function PrivacyPage() {
+type PrivacyPageProps = {
+  searchParams?: Promise<{
+    returnTo?: string | string[]
+  }>
+}
+
+export default async function PrivacyPage({ searchParams }: PrivacyPageProps) {
+  const resolvedSearchParams = await searchParams
+  const backTarget = getLegalBackTarget(resolvedSearchParams?.returnTo)
+
   return (
     <LegalPage
       legalKey="privacy"
@@ -22,6 +32,8 @@ export default function PrivacyPage() {
         'Guest contact information is used only for the service you request',
         'You may request access, correction, deletion, or export of your data',
       ]}
+      backHref={backTarget.href}
+      backLabel={backTarget.label}
       sections={[
         {
           title: '1. Information We Collect',

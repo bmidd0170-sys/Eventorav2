@@ -1,4 +1,5 @@
 import { fetchWithAuth } from "@/lib/api-client"
+import { getFriendlyResponseMessage } from "@/lib/error-utils"
 
 export type UserProfile = {
   id: string
@@ -13,7 +14,7 @@ export type UserProfile = {
 export async function getCurrentUserProfile(): Promise<UserProfile> {
   const response = await fetchWithAuth("/api/profile")
   if (!response.ok) {
-    throw new Error("Failed to load profile")
+    throw new Error(await getFriendlyResponseMessage(response, "We couldn't load your profile right now."))
   }
 
   const data = (await response.json()) as { user: UserProfile }
@@ -27,7 +28,7 @@ export async function saveCurrentUserProfile(profile: { displayName?: string | n
   })
 
   if (!response.ok) {
-    throw new Error("Failed to save profile")
+    throw new Error(await getFriendlyResponseMessage(response, "We couldn't save your profile right now."))
   }
 
   const data = (await response.json()) as { user: UserProfile }

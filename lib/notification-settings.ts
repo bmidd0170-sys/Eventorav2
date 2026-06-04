@@ -5,6 +5,9 @@ export type NotificationSettings = {
   emailMarketing: boolean
   emailConnectionsRequests: boolean
   emailConnectionsAccepted: boolean
+  emailTutorialComplete: boolean
+  emailAppUpdates: boolean
+  emailEventCancelled: boolean
   pushRsvp: boolean
   pushReminders: boolean
   pushTips: boolean
@@ -19,6 +22,9 @@ export const defaultNotificationSettings: NotificationSettings = {
   emailMarketing: false,
   emailConnectionsRequests: true,
   emailConnectionsAccepted: true,
+  emailTutorialComplete: true,
+  emailAppUpdates: true,
+  emailEventCancelled: true,
   pushRsvp: true,
   pushReminders: true,
   pushTips: false,

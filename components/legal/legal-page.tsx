@@ -21,6 +21,8 @@ type LegalPageProps = {
   sections: LegalSection[]
   sidebarTitle: string
   sidebarItems: string[]
+  backHref?: string
+  backLabel?: string
 }
 
 export function LegalPage({
@@ -33,6 +35,8 @@ export function LegalPage({
   sections,
   sidebarTitle,
   sidebarItems,
+  backHref = '/',
+  backLabel = 'Back to home',
 }: LegalPageProps) {
   useEffect(() => {
     const checkReadProgress = () => {
@@ -60,9 +64,9 @@ export function LegalPage({
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,oklch(0.55_0.25_280/0.16),transparent_35%),radial-gradient(circle_at_top_right,oklch(0.70_0.20_330/0.14),transparent_30%),linear-gradient(to_bottom,transparent,oklch(0.13_0.01_270))]" />
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div className="mb-6 flex items-center justify-between">
-          <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-smooth hover:text-foreground">
+          <Link href={backHref} className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-smooth hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
-            Back to home
+            {backLabel}
           </Link>
           <div className="hidden items-center gap-2 rounded-full border border-border/70 bg-card/70 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur md:inline-flex">
             <Sparkles className="h-3.5 w-3.5 text-primary" />

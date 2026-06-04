@@ -10,6 +10,7 @@ import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { requestGoogleAccessToken } from '@/lib/google-auth'
+import { getFriendlyErrorMessage } from '@/lib/error-utils'
 
 export default function SignInPage() {
   const router = useRouter()
@@ -36,7 +37,7 @@ export default function SignInPage() {
       await signInWithEmailAndPassword(auth, formData.email, formData.password)
       window.location.replace('/home')
     } catch (err: any) {
-      const msg = err?.message || 'Failed to sign in'
+      const msg = getFriendlyErrorMessage(err, 'We could not sign you in right now.')
       alert(msg)
     } finally {
       setIsLoading(false)
@@ -230,9 +231,9 @@ export default function SignInPage() {
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
             By signing in, you agree to our{" "}
-            <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link>
+            <Link href={{ pathname: '/terms', query: { returnTo: '/sign-in' } }} className="text-primary hover:underline">Terms of Service</Link>
             {" "}and{" "}
-            <Link href="/privacy" className="text-primary hover:underline">Privacy Policy</Link>
+            <Link href={{ pathname: '/privacy', query: { returnTo: '/sign-in' } }} className="text-primary hover:underline">Privacy Policy</Link>
           </p>
         </div>
       </div>

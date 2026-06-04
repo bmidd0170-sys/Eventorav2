@@ -1,5 +1,6 @@
 import { fetchWithAuth } from "@/lib/api-client"
 import { defaultNotificationSettings, type NotificationSettings } from "@/lib/notification-settings"
+import { getFriendlyResponseMessage } from "@/lib/error-utils"
 
 export async function getUserNotificationSettings(userId: string): Promise<NotificationSettings> {
   try {
@@ -24,7 +25,7 @@ export async function saveUserNotificationSettings(userId: string, settings: Par
     })
 
     if (!response.ok) {
-      throw new Error("Failed to save notification settings")
+      throw new Error(await getFriendlyResponseMessage(response, "We couldn't save your notification settings right now."))
     }
   } catch (err) {
     console.error('Failed to save user notification settings', err)

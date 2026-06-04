@@ -21,8 +21,8 @@ const footerLinks = {
     { label: "Press", href: "#" },
   ],
   Legal: [
-    { label: "Privacy", href: "#" },
-    { label: "Terms", href: "#" },
+    { label: "Privacy", href: "/privacy" },
+    { label: "Terms", href: "/terms" },
     { label: "Cookies", href: "#" },
   ],
 }
@@ -53,7 +53,7 @@ export function Footer() {
                 {links.map((link) => (
                   <li key={link.label}>
                     <Link
-                      href={link.href}
+                      href={link.href === '/privacy' || link.href === '/terms' ? { pathname: link.href, query: { returnTo: '/' } } : link.href}
                       className="text-sm text-muted-foreground hover:text-foreground transition-smooth"
                     >
                       {link.label}

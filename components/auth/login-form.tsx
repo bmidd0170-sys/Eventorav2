@@ -20,6 +20,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { sendEmailIfAllowed } from '@/lib/notifications'
+import { getFriendlyErrorMessage } from '@/lib/error-utils'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -65,7 +66,7 @@ export function LoginForm() {
 
       router.push('/(app)/dashboard');
     } catch (error: any) {
-      const errorMessage = error?.message || 'Failed to log in';
+      const errorMessage = getFriendlyErrorMessage(error, 'We could not sign you in right now.');
       toast({
         title: 'Error',
         description: errorMessage,

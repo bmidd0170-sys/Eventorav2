@@ -22,7 +22,7 @@ import {
     Users,
     X,
 } from "lucide-react"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import {
     DropdownMenu,
     DropdownMenuContent,

@@ -2,6 +2,7 @@ import type { User } from "@prisma/client"
 import { NextRequest } from "next/server"
 import { jwtDecode } from "jwt-decode"
 import { prisma } from "@/lib/prisma"
+import { verifyFirebaseIdToken } from "@/lib/firebase-admin"
 
 type DecodedToken = {
   sub?: string
@@ -61,10 +62,21 @@ export async function getAuthenticatedDbUser(req: NextRequest) {
 
   const token = authHeader.slice(7)
   let decodedToken: DecodedToken
-  try {
-    decodedToken = jwtDecode(token) as DecodedToken
-  } catch {
-    return null
+  const verifiedToken = await verifyFirebaseIdToken(token).catch(() => null)
+
+  if (verifiedToken) {
+    decodedToken = {
+      sub: verifiedToken.uid,
+      email: verifiedToken.email,
+      name: verifiedToken.name,
+      picture: verifiedToken.picture,
+    }
+  } else {
+    try {
+      decodedToken = jwtDecode(token) as DecodedToken
+    } catch {
+      return null
+    }
   }
 
   const dbUser = await getOrCreateDbUser(decodedToken)

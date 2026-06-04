@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 import { getUserBranding, saveUserBranding, type BrandSettings } from '@/lib/branding'
@@ -15,18 +15,16 @@ export const BrandContext = React.createContext<BrandContextValue | undefined>(u
 export function BrandProvider({ children }: { children: React.ReactNode }) {
   const [brand, setBrandState] = useState<BrandSettings | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const activeLoadIdRef = useRef(0)
 
   useEffect(() => {
-    const initialUser = auth.currentUser
-    if (initialUser) {
-      setUserId(initialUser.uid)
-      loadBrand(initialUser.uid)
-    }
-
     const unsub = onAuthStateChanged(auth, (user) => {
+      const nextLoadId = Date.now()
+      activeLoadIdRef.current = nextLoadId
+
       if (user) {
         setUserId(user.uid)
-        loadBrand(user.uid)
+        void loadBrand(user.uid, nextLoadId)
       } else {
         setUserId(null)
         setBrandState(null)
@@ -35,27 +33,34 @@ export function BrandProvider({ children }: { children: React.ReactNode }) {
     return () => unsub()
   }, [])
 
-  async function loadBrand(uid: string) {
+  async function loadBrand(uid: string, loadId: number) {
     try {
       const data = await getUserBranding(uid)
+      if (loadId !== activeLoadIdRef.current) return
       setBrandState(data)
     } catch (e) {
+      if (loadId !== activeLoadIdRef.current) return
       console.error('Failed to load brand', e)
       setBrandState({})
     }
   }
 
   useEffect(() => {
-    if (!brand) return
-    // Apply CSS variables
-    if (brand.primaryColor) {
-      document.documentElement.style.setProperty('--brand-primary', brand.primaryColor)
-      document.documentElement.style.setProperty('--brand-heading-color', brand.primaryColor)
+    const root = document.documentElement
+    const applyVar = (name: string, value: string | undefined) => {
+      if (value) {
+        root.style.setProperty(name, value)
+      } else {
+        root.style.removeProperty(name)
+      }
     }
-    if (brand.secondaryColor) document.documentElement.style.setProperty('--brand-secondary', brand.secondaryColor)
-    if (brand.accentColor) document.documentElement.style.setProperty('--brand-accent', brand.accentColor)
-    if (brand.headingFont) document.documentElement.style.setProperty('--brand-font-heading', brand.headingFont)
-    if (brand.bodyFont) document.documentElement.style.setProperty('--brand-font-body', brand.bodyFont)
+
+    applyVar('--brand-primary', brand?.primaryColor)
+    applyVar('--brand-heading-color', brand?.primaryColor)
+    applyVar('--brand-secondary', brand?.secondaryColor)
+    applyVar('--brand-accent', brand?.accentColor)
+    applyVar('--brand-font-heading', brand?.headingFont)
+    applyVar('--brand-font-body', brand?.bodyFont)
   }, [brand])
 
   const setBrand = async (b: BrandSettings) => {

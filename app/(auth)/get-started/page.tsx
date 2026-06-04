@@ -9,9 +9,9 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight, User, Check } from "lucide-react"
 import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { auth } from '@/lib/auth/client'
 import { saveCurrentUserProfile } from '@/lib/profile'
-import { requestGoogleAccessToken } from '@/lib/google-auth'
+import { requestGoogleAccessToken } from '@/lib/auth/client'
 import { hasReadAllLegalPages, subscribeLegalReadChanges } from '@/lib/legal-read'
 import { useErrorPopup } from '@/components/providers/error-popup-provider'
 

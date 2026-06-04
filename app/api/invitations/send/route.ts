@@ -1,55 +1,35 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { jwtDecode } from "jwt-decode"
+import { prisma } from "@/lib/db"
+import { getAuthenticatedDbUser, getOwnedEvent } from "@/lib/auth/server"
 import { randomBytes } from "crypto"
 import { sendEmail } from "@/lib/email"
+import { badRequest, internalServerError, unauthorized } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authResult = await getAuthenticatedDbUser(req)
+    if (!authResult) {
+      return unauthorized()
     }
 
-    const token = authHeader.slice(7)
-    let decodedToken: any
-    try {
-      decodedToken = jwtDecode(token) as any
-    } catch (err) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
-    const firebaseUid = decodedToken.sub
-    if (!firebaseUid) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
+    const { dbUser } = authResult
 
     const body = await req.json()
     const { eventId, emails, subject, message } = body
 
     if (!eventId || !emails || !Array.isArray(emails) || emails.length === 0) {
-      return NextResponse.json({ error: "Missing eventId or emails" }, { status: 400 })
+      return badRequest("Missing eventId or emails")
     }
 
-    // Get the user
-    const dbUser = await prisma.user.findUnique({ where: { firebaseUid } })
-    if (!dbUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    // Verify the user owns this event
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
-      select: { userId: true, title: true }
+    const eventResult = await getOwnedEvent(eventId, dbUser.id, {
+      select: { title: true },
     })
-
-    if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    if (eventResult.response) {
+      return eventResult.response
     }
 
-    if (event.userId !== dbUser.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    const event = eventResult.event
 
     // Create or update invitations for each email
     const createdInvitations = []
@@ -114,14 +94,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({
+    return ok({
       success: true,
       invitations: createdInvitations,
       count: createdInvitations.length,
       emailResults: emailResults,
-    }, { status: 200 })
+    })
   } catch (error) {
     console.error("Error sending invitations:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return internalServerError()
   }
 }

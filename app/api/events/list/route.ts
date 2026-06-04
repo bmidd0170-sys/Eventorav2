@@ -1,87 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { jwtDecode } from "jwt-decode"
-
-async function getOrCreateDbUser(decodedToken: any) {
-  const firebaseUid = decodedToken.sub
-  if (!firebaseUid) {
-    return null
-  }
-
-  let dbUser = await prisma.user.findUnique({ where: { firebaseUid } })
-  if (dbUser) {
-    return dbUser
-  }
-
-  const userEmail = decodedToken.email || `user+${firebaseUid}@example.com`
-
-  const findExistingUser = async () => {
-    const existingByUid = await prisma.user.findUnique({ where: { firebaseUid } })
-    if (existingByUid) {
-      return existingByUid
-    }
-
-    const existingByEmail = await prisma.user.findUnique({ where: { email: userEmail } })
-    if (existingByEmail) {
-      if (existingByEmail.firebaseUid) {
-        return existingByEmail
-      }
-
-      return prisma.user.update({
-        where: { email: userEmail },
-        data: { firebaseUid },
-      })
-    }
-
-    return null
-  }
-
-  try {
-    return await prisma.user.create({
-      data: {
-        firebaseUid,
-        email: userEmail,
-        displayName: decodedToken.name || "User",
-      },
-    })
-  } catch (createError: any) {
-    if (createError.code === "P2002") {
-      const existingUser = await findExistingUser()
-      if (existingUser) {
-        return existingUser
-      }
-
-      return null
-    }
-
-    throw createError
-  }
-}
+import { prisma } from "@/lib/db"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
+import { internalServerError, unauthorized } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authResult = await getAuthenticatedDbUser(req)
+    if (!authResult) {
+      return unauthorized()
     }
 
-    const token = authHeader.slice(7)
-    let decodedToken: any
-    try {
-      decodedToken = jwtDecode(token) as any
-    } catch (err) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
-    const firebaseUid = decodedToken.sub
-    if (!firebaseUid) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
-    }
-
-    const dbUser = await getOrCreateDbUser(decodedToken)
-    if (!dbUser) {
-      return NextResponse.json({ events: [] }, { status: 200 })
-    }
+    const { dbUser } = authResult
 
     const events = await prisma.event.findMany({
       where: { userId: dbUser.id },
@@ -111,9 +41,9 @@ export async function POST(req: NextRequest) {
       updatedAt: e.updatedAt.toISOString(),
     }))
 
-    return NextResponse.json({ events: mapped }, { status: 200 })
+    return ok({ events: mapped })
   } catch (error) {
     console.error("Events list error:", error)
-    return NextResponse.json({ error: "Failed to list events" }, { status: 500 })
+    return internalServerError("Failed to list events")
   }
 }

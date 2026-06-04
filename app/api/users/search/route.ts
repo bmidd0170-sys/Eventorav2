@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { prisma } from "@/lib/db"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
+import { internalServerError, unauthorized } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 export async function GET(req: NextRequest) {
     try {
         const authUser = await getAuthenticatedDbUser(req)
         if (!authUser) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+            return unauthorized()
         }
 
         const query = req.nextUrl.searchParams.get("q")?.trim() ?? ""
         if (!query) {
-            return NextResponse.json({ users: [] }, { status: 200 })
+            return ok({ users: [] })
         }
 
         const blockedConnections = await prisma.socialConnection.findMany({
@@ -72,16 +74,16 @@ export async function GET(req: NextRequest) {
             take: 12,
         })
 
-        return NextResponse.json({
+        return ok({
             users: users.map((user) => ({
                 id: user.id,
                 email: user.email,
                 displayName: user.displayName,
                 photoUrl: user.photoUrl,
             })),
-        }, { status: 200 })
+        })
     } catch (error) {
         console.error("User search error:", error)
-        return NextResponse.json({ error: "Failed to search users" }, { status: 500 })
+        return internalServerError("Failed to search users")
     }
 }

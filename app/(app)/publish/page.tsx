@@ -7,7 +7,7 @@ import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import { getConnections } from "@/lib/connections"
 import { useErrorPopup } from "@/components/providers/error-popup-provider"
 import {

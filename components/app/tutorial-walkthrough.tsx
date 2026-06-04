@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { onAuthStateChanged } from "firebase/auth"
 import { ArrowRight, CheckCircle2, ChevronLeft, ChevronRight, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import { fetchWithAuth } from "@/lib/api-client"
 import { getCurrentUserProfile } from "@/lib/profile"
 

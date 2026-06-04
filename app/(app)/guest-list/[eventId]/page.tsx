@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { GuestListPage } from "@/components/app/guest-list-page"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import type { InvitationSummary } from "@/lib/invitations"
 import type { Guest } from "@/lib/guest-lists"
 import { Spinner } from "@/components/ui/spinner"

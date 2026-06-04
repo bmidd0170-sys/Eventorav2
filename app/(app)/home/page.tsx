@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   ArrowUp,

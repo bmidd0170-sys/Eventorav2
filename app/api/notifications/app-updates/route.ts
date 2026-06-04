@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server"
 import { buildAppUpdateEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
 import { defaultNotificationSettings } from "@/lib/notification-settings"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db"
+import { internalServerError } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 type Body = {
     headline?: string
@@ -53,9 +55,9 @@ export async function POST(req: NextRequest) {
                 })
         )
 
-        return NextResponse.json({ ok: true, sentCount }, { status: 200 })
+        return ok({ sentCount })
     } catch (error) {
         console.error("App updates email error:", error)
-        return NextResponse.json({ error: "Failed to send app update emails" }, { status: 500 })
+        return internalServerError("Failed to send app update emails")
     }
 }

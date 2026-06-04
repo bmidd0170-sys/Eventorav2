@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { Prisma } from "@prisma/client"
 
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db"
 import { PublicInvitationView } from "./public-invitation-view"
 import type { BrandSettings } from "@/lib/branding"
 

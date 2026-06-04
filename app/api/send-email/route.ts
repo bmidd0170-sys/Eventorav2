@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { sendEmail } from "@/lib/email"
+import { badRequest, internalServerError } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 type ReqBody = {
   to: string
@@ -13,27 +15,18 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as ReqBody
     if (!body?.to || !body?.subject) {
-      return NextResponse.json(
-        { error: 'Missing required fields: to and subject are required' },
-        { status: 400 }
-      )
+      return badRequest('Missing required fields: to and subject are required')
     }
 
     await sendEmail(body)
 
-    return NextResponse.json({ ok: true, message: `Email sent to ${body.to}` })
+    return ok({ message: `Email sent to ${body.to}` })
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)
     console.error('[/api/send-email] Email sending failed:', {
       error: errorMsg,
       stack: err instanceof Error ? err.stack : undefined,
     })
-    return NextResponse.json(
-      {
-        error: 'Failed to send email',
-        details: errorMsg,
-      },
-      { status: 500 }
-    )
+    return internalServerError('Failed to send email', { details: errorMsg })
   }
 }

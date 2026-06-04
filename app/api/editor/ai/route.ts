@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
 
 type EditorRequest = {
   prompt: string

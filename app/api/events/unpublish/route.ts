@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { getAuthenticatedDbUser, getOwnedEvent } from "@/lib/auth/server"
 import { buildEventUnpublishedEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db"
+import { badRequest, conflict, internalServerError, unauthorized } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 type UnpublishRequest = {
   eventId?: string
@@ -13,23 +15,21 @@ export async function POST(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const body = (await req.json().catch(() => ({}))) as UnpublishRequest
     const eventId = typeof body.eventId === "string" ? body.eventId.trim() : ""
 
     if (!eventId) {
-      return NextResponse.json({ error: "Missing eventId" }, { status: 400 })
+      return badRequest("Missing eventId")
     }
 
-    const event = await prisma.event.findUnique({
-      where: { id: eventId },
+    const eventResult = await getOwnedEvent(eventId, authUser.dbUser.id, {
       select: {
         id: true,
         title: true,
         status: true,
-        userId: true,
         user: {
           select: {
             displayName: true,
@@ -37,21 +37,16 @@ export async function POST(req: NextRequest) {
           },
         },
       },
+      forbiddenMessage: "Unauthorized",
     })
-
-    if (!event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    if (eventResult.response) {
+      return eventResult.response
     }
 
-    if (event.userId !== authUser.dbUser.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
-    }
+    const event = eventResult.event
 
     if (event.status !== "published") {
-      return NextResponse.json(
-        { error: "Invitation is already unpublished", eventId, status: event.status },
-        { status: 409 }
-      )
+      return conflict("Invitation is already unpublished", { eventId, status: event.status })
     }
 
     const updatedEvent = await prisma.event.update({
@@ -90,17 +85,14 @@ export async function POST(req: NextRequest) {
         )
     )
 
-    return NextResponse.json(
-      {
-        success: true,
-        eventId,
-        status: updatedEvent.status,
-        notificationsSent: deliveryResults.length,
-      },
-      { status: 200 }
-    )
+    return ok({
+      success: true,
+      eventId,
+      status: updatedEvent.status,
+      notificationsSent: deliveryResults.length,
+    })
   } catch (error) {
     console.error("Unpublish error:", error)
-    return NextResponse.json({ error: "Failed to unpublish invitation" }, { status: 500 })
+    return internalServerError("Failed to unpublish invitation")
   }
 }

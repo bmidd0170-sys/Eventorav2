@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { prisma } from "@/lib/db"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
+import { internalServerError, unauthorized } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 function serializeUser(user: {
   id: string
@@ -26,13 +28,13 @@ export async function GET(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
-    return NextResponse.json({ user: serializeUser(authUser.dbUser) }, { status: 200 })
+    return ok({ user: serializeUser(authUser.dbUser) })
   } catch (error) {
     console.error("Profile load error:", error)
-    return NextResponse.json({ error: "Failed to load profile" }, { status: 500 })
+    return internalServerError("Failed to load profile")
   }
 }
 
@@ -40,7 +42,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await req.json()
@@ -55,9 +57,9 @@ export async function PUT(req: NextRequest) {
       },
     })
 
-    return NextResponse.json({ user: serializeUser(updatedUser) }, { status: 200 })
+    return ok({ user: serializeUser(updatedUser) })
   } catch (error) {
     console.error("Profile save error:", error)
-    return NextResponse.json({ error: "Failed to save profile" }, { status: 500 })
+    return internalServerError("Failed to save profile")
   }
 }

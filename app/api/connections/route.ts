@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { prisma } from "@/lib/db"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
 import { defaultNotificationSettings, type NotificationSettings } from "@/lib/notification-settings"
 import { sendEmail } from "@/lib/email"
+import { badRequest, conflict, forbidden, internalServerError, notFound, unauthorized } from "@/lib/api/responses"
+import { created, ok } from "@/lib/api/success"
 
 function serializeConnection(connection: {
   id: string
@@ -124,7 +126,7 @@ export async function GET(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const view = req.nextUrl.searchParams.get("view") || "connections"
@@ -138,7 +140,7 @@ export async function GET(req: NextRequest) {
         orderBy: { updatedAt: "desc" },
       })
 
-      return NextResponse.json({
+      return ok({
         requests: requests.map(serializeRequest),
       })
     }
@@ -150,7 +152,7 @@ export async function GET(req: NextRequest) {
         orderBy: { updatedAt: "desc" },
       })
 
-      return NextResponse.json({
+      return ok({
         requests: requests.map((request) =>
           serializeRequest({
             ...request,
@@ -169,12 +171,12 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: "desc" },
     })
 
-    return NextResponse.json({
+    return ok({
       connections: connections.map(serializeConnection),
     })
   } catch (error) {
     console.error("Connections load error:", error)
-    return NextResponse.json({ error: "Failed to load connections" }, { status: 500 })
+    return internalServerError("Failed to load connections")
   }
 }
 
@@ -182,7 +184,7 @@ export async function POST(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await req.json()
@@ -191,20 +193,20 @@ export async function POST(req: NextRequest) {
     if (action === "send") {
       const recipientEmail = String(body.recipientEmail || "").trim().toLowerCase()
       if (!recipientEmail) {
-        return NextResponse.json({ error: "Missing recipientEmail" }, { status: 400 })
+        return badRequest("Missing recipientEmail")
       }
 
       const recipient = await prisma.user.findUnique({ where: { email: recipientEmail } })
       if (!recipient) {
-        return NextResponse.json({ error: "No user found for that email" }, { status: 404 })
+        return notFound("No user found for that email")
       }
 
       if (recipient.id === authUser.dbUser.id) {
-        return NextResponse.json({ error: "You cannot connect with yourself" }, { status: 400 })
+        return badRequest("You cannot connect with yourself")
       }
 
       if (await hasBlockingConnection(authUser.dbUser.id, recipient.id)) {
-        return NextResponse.json({ error: "You cannot send a request to this user" }, { status: 403 })
+        return forbidden("You cannot send a request to this user")
       }
 
       const acceptedConnection = await prisma.socialConnection.findFirst({
@@ -225,7 +227,7 @@ export async function POST(req: NextRequest) {
       })
 
       if (acceptedConnection) {
-        return NextResponse.json({ error: "You are already connected with this user" }, { status: 409 })
+        return conflict("You are already connected with this user")
       }
 
       const existingRequest = await prisma.connectionRequest.findUnique({
@@ -238,7 +240,7 @@ export async function POST(req: NextRequest) {
       })
 
       if (existingRequest) {
-        return NextResponse.json({ request: serializeRequest(existingRequest) }, { status: 200 })
+        return ok({ request: serializeRequest(existingRequest) })
       }
 
       const request = await prisma.connectionRequest.create({
@@ -263,27 +265,27 @@ export async function POST(req: NextRequest) {
         console.warn("Failed to send connection request email", emailError)
       }
 
-      return NextResponse.json({ request: serializeRequest(request) }, { status: 201 })
+      return created({ request: serializeRequest(request) })
     }
 
     if (action === "accept") {
       const requestId = String(body.requestId || "")
       if (!requestId) {
-        return NextResponse.json({ error: "Missing requestId" }, { status: 400 })
+        return badRequest("Missing requestId")
       }
 
       const request = await prisma.connectionRequest.findUnique({ where: { id: requestId } })
       if (!request || request.toUserId !== authUser.dbUser.id) {
-        return NextResponse.json({ error: "Request not found" }, { status: 404 })
+        return notFound("Request not found")
       }
 
       if (await hasBlockingConnection(authUser.dbUser.id, request.fromUserId)) {
-        return NextResponse.json({ error: "This request can no longer be accepted" }, { status: 403 })
+        return forbidden("This request can no longer be accepted")
       }
 
       const sender = await prisma.user.findUnique({ where: { id: request.fromUserId } })
       if (!sender) {
-        return NextResponse.json({ error: "Sender not found" }, { status: 404 })
+        return notFound("Sender not found")
       }
 
       const acceptedAt = new Date()
@@ -362,18 +364,18 @@ export async function POST(req: NextRequest) {
         console.warn("Failed to send connection accepted emails", emailError)
       }
 
-      return NextResponse.json({ ok: true }, { status: 200 })
+      return ok({ ok: true })
     }
 
     if (action === "reject") {
       const requestId = String(body.requestId || "")
       if (!requestId) {
-        return NextResponse.json({ error: "Missing requestId" }, { status: 400 })
+        return badRequest("Missing requestId")
       }
 
       const request = await prisma.connectionRequest.findUnique({ where: { id: requestId } })
       if (!request || request.toUserId !== authUser.dbUser.id) {
-        return NextResponse.json({ error: "Request not found" }, { status: 404 })
+        return notFound("Request not found")
       }
 
       await prisma.connectionRequest.update({
@@ -381,7 +383,7 @@ export async function POST(req: NextRequest) {
         data: { status: "rejected" },
       })
 
-      return NextResponse.json({ ok: true }, { status: 200 })
+      return ok({ ok: true })
     }
 
     if (action === "block") {
@@ -390,7 +392,7 @@ export async function POST(req: NextRequest) {
       const connectedUserEmail = String(body.connectedUserEmail || "")
 
       if (!connectedUserId) {
-        return NextResponse.json({ error: "Missing connectedUserId" }, { status: 400 })
+        return badRequest("Missing connectedUserId")
       }
 
       await removeRelationshipBetweenUsers(authUser.dbUser.id, connectedUserId)
@@ -416,13 +418,13 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      return NextResponse.json({ connection: serializeConnection(blockedConnection) }, { status: 200 })
+      return ok({ connection: serializeConnection(blockedConnection) })
     }
 
     if (action === "unblock") {
       const connectedUserId = String(body.connectedUserId || "")
       if (!connectedUserId) {
-        return NextResponse.json({ error: "Missing connectedUserId" }, { status: 400 })
+        return badRequest("Missing connectedUserId")
       }
 
       await prisma.socialConnection.deleteMany({
@@ -433,13 +435,13 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      return NextResponse.json({ ok: true }, { status: 200 })
+      return ok({ ok: true })
     }
 
-    return NextResponse.json({ error: "Unsupported action" }, { status: 400 })
+    return badRequest("Unsupported action")
   } catch (error) {
     console.error("Connections mutation error:", error)
-    return NextResponse.json({ error: "Failed to update connections" }, { status: 500 })
+    return internalServerError("Failed to update connections")
   }
 }
 
@@ -447,20 +449,20 @@ export async function DELETE(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const body = await req.json()
     const connectedUserId = String(body.connectedUserId || "")
     if (!connectedUserId) {
-      return NextResponse.json({ error: "Missing connectedUserId" }, { status: 400 })
+      return badRequest("Missing connectedUserId")
     }
 
     await removeRelationshipBetweenUsers(authUser.dbUser.id, connectedUserId)
 
-    return NextResponse.json({ ok: true }, { status: 200 })
+    return ok({ ok: true })
   } catch (error) {
     console.error("Connection delete error:", error)
-    return NextResponse.json({ error: "Failed to remove connection" }, { status: 500 })
+    return internalServerError("Failed to remove connection")
   }
 }

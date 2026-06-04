@@ -22,7 +22,7 @@ import {
   reauthenticateWithPopup,
   signOut,
 } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import { fetchWithAuth } from "@/lib/api-client"
 import { getUserNotificationSettings, saveUserNotificationSettings } from '@/lib/notifications'
 import { getCurrentUserProfile, saveCurrentUserProfile } from "@/lib/profile"

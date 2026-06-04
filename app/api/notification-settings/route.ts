@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { prisma } from "@/lib/db"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
 import { defaultNotificationSettings, type NotificationSettings } from "@/lib/notification-settings"
+import { internalServerError, unauthorized } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 function serializeSettings(settings: NotificationSettings) {
   return { ...settings }
@@ -11,7 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const stored = await prisma.userNotificationSettings.findUnique({
@@ -37,10 +39,10 @@ export async function GET(req: NextRequest) {
       }
       : defaultNotificationSettings
 
-    return NextResponse.json({ settings: serializeSettings(settings) }, { status: 200 })
+    return ok({ settings: serializeSettings(settings) })
   } catch (error) {
     console.error("Notification settings load error:", error)
-    return NextResponse.json({ error: "Failed to load notification settings" }, { status: 500 })
+    return internalServerError("Failed to load notification settings")
   }
 }
 
@@ -48,7 +50,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authUser = await getAuthenticatedDbUser(req)
     if (!authUser) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return unauthorized()
     }
 
     const body = (await req.json()) as Partial<NotificationSettings>
@@ -63,7 +65,7 @@ export async function PUT(req: NextRequest) {
       update: merged,
     })
 
-    return NextResponse.json({
+    return ok({
       settings: {
         emailRsvp: saved.emailRsvp,
         emailReminders: saved.emailReminders,
@@ -83,6 +85,6 @@ export async function PUT(req: NextRequest) {
     })
   } catch (error) {
     console.error("Notification settings save error:", error)
-    return NextResponse.json({ error: "Failed to save notification settings" }, { status: 500 })
+    return internalServerError("Failed to save notification settings")
   }
 }

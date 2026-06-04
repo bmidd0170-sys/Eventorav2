@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { type InvitationSummary } from "@/lib/invitations"
-import { auth } from "@/lib/firebase"
+import { auth } from "@/lib/auth/client"
 import { onAuthStateChanged } from "firebase/auth"
 import {
   Plus,

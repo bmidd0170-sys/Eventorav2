@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Sparkles, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
-import { requestGoogleAccessToken } from '@/lib/google-auth'
+import { auth } from '@/lib/auth/client'
+import { requestGoogleAccessToken } from '@/lib/auth/client'
 import { getFriendlyErrorMessage } from '@/lib/error-utils'
 import { useErrorPopup } from '@/components/providers/error-popup-provider'
 

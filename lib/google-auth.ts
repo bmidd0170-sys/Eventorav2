@@ -1,5 +1,6 @@
-const GOOGLE_OAUTH_CLIENT_ID = '1048917315656-f31pbntlfcq7j1fdepnvq03pg63a8s86.apps.googleusercontent.com'
 const GOOGLE_IDENTITY_SCRIPT_SRC = 'https://accounts.google.com/gsi/client'
+
+const GOOGLE_OAUTH_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
 
 type GoogleTokenResponse = {
   access_token?: string
@@ -39,6 +40,10 @@ function loadGoogleIdentityScript() {
 
 export async function requestGoogleAccessToken() {
   await loadGoogleIdentityScript()
+
+  if (!GOOGLE_OAUTH_CLIENT_ID) {
+    throw new Error('Google sign-in is not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID.')
+  }
 
   const google = (window as any).google
   const oauth2 = google?.accounts?.oauth2

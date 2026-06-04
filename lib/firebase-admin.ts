@@ -1,10 +1,16 @@
 import "server-only"
 
 import { cert, getApps, initializeApp } from "firebase-admin/app"
-import { getAuth } from "firebase-admin/auth"
+import { getAuth, type DecodedIdToken } from "firebase-admin/auth"
 
 function cleanEnv(value: string | undefined) {
   return value?.trim().replace(/^['"]|['"]$/g, "")
+}
+
+export function hasFirebaseAdminCredentials() {
+  return Boolean(
+    cleanEnv(process.env.FIREBASE_CLIENT_EMAIL) && cleanEnv(process.env.FIREBASE_PRIVATE_KEY)
+  )
 }
 
 function getAdminApp() {
@@ -32,11 +38,7 @@ function getAdminApp() {
 }
 
 export async function deleteFirebaseAuthUser(firebaseUid: string) {
-  const hasCredentials = Boolean(
-    cleanEnv(process.env.FIREBASE_CLIENT_EMAIL) && cleanEnv(process.env.FIREBASE_PRIVATE_KEY)
-  )
-
-  if (!hasCredentials) {
+  if (!hasFirebaseAdminCredentials()) {
     return { deleted: false as const, skipped: true as const }
   }
 
@@ -54,4 +56,13 @@ export async function deleteFirebaseAuthUser(firebaseUid: string) {
 
     throw error
   }
+}
+
+export async function verifyFirebaseIdToken(token: string): Promise<DecodedIdToken | null> {
+  if (!hasFirebaseAdminCredentials()) {
+    return null
+  }
+
+  const auth = getAuth(getAdminApp())
+  return auth.verifyIdToken(token)
 }

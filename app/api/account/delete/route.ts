@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import type { Prisma } from '@prisma/client'
-import { getAuthenticatedDbUser } from '@/lib/api-auth'
-import { deleteFirebaseAuthUser } from '@/lib/firebase-admin'
-import { prisma } from '@/lib/prisma'
+import { getAuthenticatedDbUser } from '@/lib/auth/server'
+import { deleteFirebaseAuthUser } from '@/lib/auth/server'
+import { prisma } from '@/lib/db'
+import { internalServerError, unauthorized } from '@/lib/api/responses'
+import { ok } from '@/lib/api/success'
 
 async function tableExists(tx: Prisma.TransactionClient, tableName: string) {
   const result = await tx.$queryRaw<Array<{ exists: boolean }>>`
@@ -14,7 +16,7 @@ async function tableExists(tx: Prisma.TransactionClient, tableName: string) {
 export async function POST(req: NextRequest) {
   const auth = await getAuthenticatedDbUser(req)
   if (!auth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return unauthorized()
   }
 
   const { firebaseUid } = auth
@@ -78,12 +80,12 @@ export async function POST(req: NextRequest) {
 
     const firebaseDeletion = await deleteFirebaseAuthUser(firebaseUid)
 
-    return NextResponse.json({
+    return ok({
       success: true,
       firebaseAuthDeletionSkipped: firebaseDeletion.skipped ?? false,
     })
   } catch (err) {
     console.error('Failed to fully delete user', err)
-    return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 })
+    return internalServerError('Failed to delete user')
   }
 }

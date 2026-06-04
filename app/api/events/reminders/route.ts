@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { buildEventReminderEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db"
 import { defaultNotificationSettings } from "@/lib/notification-settings"
+import { internalServerError } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 type ReminderBody = {
     eventId?: string
@@ -93,9 +95,9 @@ export async function POST(req: NextRequest) {
             })
         )
 
-        return NextResponse.json({ ok: true, sentCount, eventCount: events.length }, { status: 200 })
+        return ok({ sentCount, eventCount: events.length })
     } catch (error) {
         console.error("Event reminders error:", error)
-        return NextResponse.json({ error: "Failed to send reminders" }, { status: 500 })
+        return internalServerError("Failed to send reminders")
     }
 }

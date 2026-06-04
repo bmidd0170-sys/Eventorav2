@@ -1,11 +1,13 @@
 import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
-import { getAuthenticatedDbUser } from "@/lib/api-auth"
+import { getAuthenticatedDbUser } from "@/lib/auth/server"
 import { buildRsvpConfirmationEmail, buildRsvpUpdateEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
-import { prisma } from "@/lib/prisma"
+import { prisma } from "@/lib/db"
 import { defaultNotificationSettings } from "@/lib/notification-settings"
+import { badRequest, internalServerError, notFound } from "@/lib/api/responses"
+import { ok } from "@/lib/api/success"
 
 type Body = {
     eventId?: string
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
         const response = body.response === "attending" || body.response === "not-attending" ? body.response : null
 
         if (!eventId || !guestEmail || !response) {
-            return NextResponse.json({ error: "Missing eventId, guestEmail, or response" }, { status: 400 })
+            return badRequest("Missing eventId, guestEmail, or response")
         }
 
         const event = await prisma.event.findUnique({
@@ -45,7 +47,7 @@ export async function POST(req: NextRequest) {
         })
 
         if (!event) {
-            return NextResponse.json({ error: "Event not found" }, { status: 404 })
+            return notFound("Event not found")
         }
 
         const invitation = await prisma.invitation.upsert({
@@ -124,9 +126,9 @@ export async function POST(req: NextRequest) {
                 : Promise.resolve(),
         ])
 
-        return NextResponse.json({ success: true, invitation }, { status: 200 })
+        return ok({ success: true, invitation })
     } catch (error) {
         console.error("RSVP response error:", error)
-        return NextResponse.json({ error: "Failed to save RSVP" }, { status: 500 })
+        return internalServerError("Failed to save RSVP")
     }
 }

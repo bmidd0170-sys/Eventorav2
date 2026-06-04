@@ -3,7 +3,7 @@
 
 Live demo: https://eventorav2.vercel.app
 
-Invyra is an event management web application built with Next.js (App Router), TypeScript, Prisma (PostgreSQL), Firebase (social features), and several modern UI/tooling libraries. It provides event creation, guest lists, invitations, editor tools, and a small social layer for connections and requests.
+Invyra is an event management web application built with Next.js (App Router), TypeScript, Prisma (PostgreSQL on Neon), Firebase Authentication, and several modern UI/tooling libraries. It provides event creation, guest lists, invitations, editor tools, and social features backed by PostgreSQL.
 
 **Quick Links**
 - **Source:** This repository (root)
@@ -18,7 +18,8 @@ Invyra is an event management web application built with Next.js (App Router), T
 - **Language:** TypeScript (strict)
 - **Styling:** Tailwind CSS (v4) via `@tailwindcss/postcss` + `tw-animate-css` and shadcn/ui
 - **Database:** PostgreSQL via Prisma (Neon recommended)
-- **Auth & Social:** Firebase Auth + Firestore (connections/requests)
+- **Auth:** Firebase Authentication
+- **Database:** PostgreSQL via Neon + Prisma (including social features)
 - **AI:** OpenAI integration for editor assistant (optional, uses `OPENAI_API_KEY`)
 - **Maps:** Google Maps (lazy-loaded using `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`)
 
@@ -60,7 +61,7 @@ npx prisma db push
 - `DATABASE_URL` — PostgreSQL connection string (Neon recommended)
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` — Google Maps API key for map features
 - `OPENAI_API_KEY` — optional; used by the editor AI route
-- Firebase config for auth + Firestore (see `lib/firebase.ts`)
+- Firebase client config for authentication (see `lib/auth/client.ts`)
 - Firebase Admin credentials for server-side account deletion: `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, and optionally `FIREBASE_PROJECT_ID`
 
 **Project Routes (high level)**
@@ -77,15 +78,16 @@ Check the `app/` folder for individual route implementations.
 - App shell: [app/(app)/layout.tsx](app/(app)/layout.tsx)
 - API routes: [app/api/](app/api/)
 - Prisma schema: [prisma/schema.prisma](prisma/schema.prisma)
-- DB client: [lib/prisma.ts](lib/prisma.ts)
-- Firebase helpers: [lib/firebase.ts](lib/firebase.ts)
+- DB client: [lib/db/index.ts](lib/db/index.ts)
+- Auth client helpers: [lib/auth/client.ts](lib/auth/client.ts)
+- Auth server helpers: [lib/auth/server.ts](lib/auth/server.ts)
 
 **Developer Notes & Gotchas**
 - Use `pnpm` (the `pnpm-lock.yaml` is authoritative); `package-lock.json` is stale.
 - `next build` ignores TypeScript errors — always run `npx tsc --noEmit` before releasing.
 - The project is generated from a v0.app boilerplate — some patterns follow that generator.
 - Styles: `app/globals.css` is the authoritative stylesheet; `styles/globals.css` is leftover and not used.
-- Dual persistence: main app data (users, events, invitations, guest lists) in PostgreSQL/Prisma; social features (connections/requests) in Firebase Firestore.
+- Unified persistence: application and social data are stored in PostgreSQL/Prisma (Neon).
 - Vercel Analytics only renders in production mode.
 
 **Testing & Utilities**
@@ -104,10 +106,10 @@ If you'd like, I can also:
 - **Type checking:** Always run `npx tsc --noEmit` before merging or releasing. `next build` can skip TS errors.
 - **Lint & format:** Run `pnpm lint` and your preferred formatter before opening PRs. Keep ESLint warnings minimal.
 - **Local dev:** Start with `pnpm dev`. Ensure nothing else is using port 3000.
-- **Environment variables & secrets:** Store runtime secrets in `.env.local` (never commit). Configure CI/Vercel environment variables for production keys (DB, Firebase, OpenAI, Google Maps).
+- **Environment variables & secrets:** Store runtime secrets in `.env` (never commit). In CI/GitHub, configure repository secrets or environment variables with the same key names (DB, Firebase, OpenAI, Google Maps).
 - **Prisma workflow:** After schema edits run `npx prisma generate`. For local iterative work you can use `npx prisma db push` to sync quickly, but prefer `prisma migrate` (e.g. `npx prisma migrate dev`) and checked migrations for production deployments.
 - **Database & backups:** Use Neon or a managed Postgres in production. Keep a separate staging DB and take regular backups before running migrations in production.
-- **Firebase:** Keep Firestore security rules and Firebase config in environment variables. Don't store service account keys in the repo.
+- **Firebase auth:** Keep Firebase auth config in environment variables. For server-side token verification and admin operations, configure `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` securely.
 - **AI & third-party keys:** Provide `OPENAI_API_KEY` only where required. Add usage limits and monitor costs for OpenAI integrations.
 - **Commit & PR hygiene:** Create feature branches, run `npx tsc --noEmit` + `pnpm lint`, include small focused commits, and write descriptive PRs.
 - **Testing:** No test framework is preconfigured — add unit/integration tests if you touch core logic (recommended for backend logic and Prisma queries).

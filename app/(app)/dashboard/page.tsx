@@ -36,8 +36,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useErrorPopup } from "@/components/providers/error-popup-provider"
 
 export default function DashboardPage() {
+  const { showError } = useErrorPopup()
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "draft">("all")
   const [reminderFilter, setReminderFilter] = useState<"all" | "on" | "off">("all")
@@ -79,6 +81,10 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.error("Failed to fetch events:", err)
+        showError({
+          title: "Could not load events",
+          message: "Your dashboard data is temporarily unavailable. Please refresh and try again.",
+        })
       }
     })
     return () => unsubscribe()
@@ -168,7 +174,8 @@ export default function DashboardPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Delete failed")
+        const payload = await response.json().catch(() => null) as { error?: string } | null
+        throw new Error(payload?.error || "Delete failed")
       }
 
       const deletedIds = new Set(deleteDialogTargets.map(event => event.id))
@@ -179,6 +186,10 @@ export default function DashboardPage() {
       setDeleteDialogTargets([])
     } catch (error) {
       console.error("Failed to delete event(s):", error)
+      showError({
+        title: "Delete failed",
+        message: error instanceof Error ? error.message : "We could not delete the selected event(s).",
+      })
     } finally {
       setDeletingEventId(null)
     }

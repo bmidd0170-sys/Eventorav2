@@ -13,9 +13,11 @@ import { auth } from '@/lib/firebase'
 import { saveCurrentUserProfile } from '@/lib/profile'
 import { requestGoogleAccessToken } from '@/lib/google-auth'
 import { hasReadAllLegalPages, subscribeLegalReadChanges } from '@/lib/legal-read'
+import { useErrorPopup } from '@/components/providers/error-popup-provider'
 
 export default function GetStartedPage() {
   const router = useRouter()
+  const { showError } = useErrorPopup()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [step, setStep] = useState<"signup" | "details">("signup")
@@ -51,7 +53,11 @@ export default function GetStartedPage() {
 
     if (step === "signup") {
       if (!canContinue) {
-        alert('Please agree to the Terms of Service and Privacy Policy before continuing.')
+        showError({
+          title: "Legal agreement required",
+          message: "Please review and agree to the Terms of Service and Privacy Policy before continuing.",
+          severity: "info",
+        })
         return
       }
 
@@ -60,7 +66,11 @@ export default function GetStartedPage() {
     }
 
     if (!canContinue) {
-      alert('Please agree to the Terms of Service and Privacy Policy before creating an account.')
+      showError({
+        title: "Legal agreement required",
+        message: "Please review and agree to the Terms of Service and Privacy Policy before creating your account.",
+        severity: "info",
+      })
       return
     }
 
@@ -70,7 +80,10 @@ export default function GetStartedPage() {
       await saveCurrentUserProfile({ displayName: formData.name })
       router.push('/home')
     } catch (err: any) {
-      alert(err?.message || 'Failed to create account')
+      showError({
+        title: "Could not create account",
+        message: err?.message || 'Please check your details and try again.',
+      })
     } finally {
       setIsLoading(false)
     }
@@ -78,7 +91,11 @@ export default function GetStartedPage() {
 
   async function handleGoogleSignIn() {
     if (!canContinue) {
-      alert('Please agree to the Terms of Service and Privacy Policy before continuing with Google.')
+      showError({
+        title: "Legal agreement required",
+        message: "Please review and agree to the Terms of Service and Privacy Policy before continuing with Google.",
+        severity: "info",
+      })
       return
     }
 
@@ -92,7 +109,11 @@ export default function GetStartedPage() {
       })
       router.replace('/home')
     } catch (err: any) {
-      alert(err?.message || 'Google sign-in failed')
+      showError({
+        title: "Google sign-up failed",
+        message: err?.message || 'Please try again or continue with email and password.',
+        severity: "warning",
+      })
     }
   }
 

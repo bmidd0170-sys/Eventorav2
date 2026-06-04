@@ -7,6 +7,7 @@ import { auth } from "@/lib/firebase"
 import type { InvitationSummary } from "@/lib/invitations"
 import type { Guest } from "@/lib/guest-lists"
 import { Spinner } from "@/components/ui/spinner"
+import { useErrorPopup } from "@/components/providers/error-popup-provider"
 
 const TUTORIAL_PREVIEW_EVENT_ID = "tutorial-preview"
 
@@ -52,6 +53,7 @@ function buildTutorialPreviewInvitation(title: string): InvitationSummary {
 }
 
 export default function GuestListRoutePage() {
+    const { showError } = useErrorPopup()
     const params = useParams()
     const eventId = params.eventId as string
     const [invitation, setInvitation] = useState<InvitationSummary | null>(null)
@@ -73,6 +75,11 @@ export default function GuestListRoutePage() {
                 const user = auth.currentUser
                 if (!user) {
                     setError("Not authenticated")
+                    showError({
+                        title: "Please sign in",
+                        message: "Your session expired before we could load this guest list.",
+                        severity: "warning",
+                    })
                     return
                 }
 
@@ -89,6 +96,10 @@ export default function GuestListRoutePage() {
 
                 if (!eventRes.ok) {
                     setError("Failed to fetch event")
+                    showError({
+                        title: "Event unavailable",
+                        message: "We could not load this event right now. Please refresh and try again.",
+                    })
                     return
                 }
 
@@ -105,6 +116,11 @@ export default function GuestListRoutePage() {
                     }
 
                     setError("Event not found")
+                    showError({
+                        title: "Event not found",
+                        message: "This event may have been removed or you no longer have access.",
+                        severity: "info",
+                    })
                     return
                 }
 
@@ -131,6 +147,10 @@ export default function GuestListRoutePage() {
 
                 if (!invitRes.ok) {
                     setError("Failed to fetch invitations")
+                    showError({
+                        title: "Could not load guests",
+                        message: "The guest list is temporarily unavailable. Please try again shortly.",
+                    })
                     return
                 }
 
@@ -156,6 +176,10 @@ export default function GuestListRoutePage() {
             } catch (err) {
                 console.error("Error loading data:", err)
                 setError("An error occurred while loading data")
+                showError({
+                    title: "Guest list failed to load",
+                    message: "Something unexpected happened while loading guest details.",
+                })
             } finally {
                 setIsLoading(false)
             }

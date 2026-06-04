@@ -11,9 +11,11 @@ import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential, o
 import { auth } from '@/lib/firebase'
 import { requestGoogleAccessToken } from '@/lib/google-auth'
 import { getFriendlyErrorMessage } from '@/lib/error-utils'
+import { useErrorPopup } from '@/components/providers/error-popup-provider'
 
 export default function SignInPage() {
   const router = useRouter()
+  const { showError } = useErrorPopup()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
@@ -38,7 +40,11 @@ export default function SignInPage() {
       window.location.replace('/home')
     } catch (err: any) {
       const msg = getFriendlyErrorMessage(err, 'We could not sign you in right now.')
-      alert(msg)
+      showError({
+        title: "Sign-in failed",
+        message: msg,
+        severity: "warning",
+      })
     } finally {
       setIsLoading(false)
     }
@@ -51,7 +57,11 @@ export default function SignInPage() {
       await signInWithCredential(auth, credential)
       window.location.replace('/home')
     } catch (err: any) {
-      alert(err?.message || 'Google sign-in failed')
+      showError({
+        title: "Google sign-in failed",
+        message: err?.message || 'Please try again or continue with email and password.',
+        severity: "warning",
+      })
     }
   }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { onAuthStateChanged } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { fetchWithAuth } from "@/lib/api-client"
+import { useErrorPopup } from "@/components/providers/error-popup-provider"
 import {
   acceptConnectionRequest,
   blockUser,
@@ -30,6 +31,7 @@ type UseConnectionsManagerOptions = {
 }
 
 export function useConnectionsManager({ enableSearch = false, includeOutgoingRequests = false }: UseConnectionsManagerOptions = {}) {
+  const { showError } = useErrorPopup()
   const [connections, setConnections] = useState<Connection[]>([])
   const [pendingRequests, setPendingRequests] = useState<ConnectionRequest[]>([])
   const [outgoingRequests, setOutgoingRequests] = useState<ConnectionRequest[]>([])
@@ -165,6 +167,10 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
     } catch (err) {
       console.error("Error loading connections:", err)
       setError("Failed to load connections")
+      showError({
+        title: "Connections unavailable",
+        message: "We could not load your connections right now.",
+      })
     } finally {
       setLoadingConnections(false)
     }
@@ -179,6 +185,11 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
       setPendingRequests(data)
     } catch (err) {
       console.error("Error loading pending requests:", err)
+      showError({
+        title: "Requests unavailable",
+        message: "Incoming connection requests could not be loaded.",
+        severity: "warning",
+      })
     } finally {
       if (!silent) {
         setLoadingRequests(false)
@@ -195,6 +206,11 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
       setOutgoingRequests(data)
     } catch (err) {
       console.error("Error loading outgoing requests:", err)
+      showError({
+        title: "Outgoing requests unavailable",
+        message: "Sent requests could not be loaded right now.",
+        severity: "warning",
+      })
     } finally {
       if (!silent) {
         setLoadingOutgoingRequests(false)
@@ -227,6 +243,10 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
     } catch (err) {
       console.error("Error removing connection:", err)
       setError("Failed to remove connection")
+      showError({
+        title: "Could not remove connection",
+        message: "Please try again in a moment.",
+      })
     }
   }
 
@@ -242,6 +262,10 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
     } catch (err) {
       console.error("Error blocking user:", err)
       setError("Failed to block user")
+      showError({
+        title: "Could not block user",
+        message: "Please try again in a moment.",
+      })
     }
   }
 
@@ -261,6 +285,10 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
     } catch (err) {
       console.error("Error accepting request:", err)
       setError("Failed to accept connection request")
+      showError({
+        title: "Could not accept request",
+        message: "Please try again in a moment.",
+      })
     }
   }
 
@@ -271,6 +299,10 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
     } catch (err) {
       console.error("Error rejecting request:", err)
       setError("Failed to reject connection request")
+      showError({
+        title: "Could not reject request",
+        message: "Please try again in a moment.",
+      })
     }
   }
 
@@ -279,11 +311,21 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
 
     if (!email.trim()) {
       setError("Please enter an email address")
+      showError({
+        title: "Email required",
+        message: "Enter an email address before sending a connection request.",
+        severity: "info",
+      })
       return
     }
 
     if (!currentUserId) {
       setError("You must be logged in to send a connection request")
+      showError({
+        title: "Please sign in",
+        message: "Your session expired. Sign in again to send connection requests.",
+        severity: "warning",
+      })
       return
     }
 
@@ -301,6 +343,10 @@ export function useConnectionsManager({ enableSearch = false, includeOutgoingReq
     } catch (err) {
       console.error("Error sending connection request:", err)
       setError("Failed to send connection request. Please try again.")
+      showError({
+        title: "Request not sent",
+        message: err instanceof Error ? err.message : "We could not send this connection request right now.",
+      })
     } finally {
       setSendingRequest(false)
     }

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { auth } from "@/lib/firebase"
 import { getConnections } from "@/lib/connections"
+import { useErrorPopup } from "@/components/providers/error-popup-provider"
 import {
   Link2,
   Mail,
@@ -40,7 +41,29 @@ type Contact = {
   photoUrl?: string | null
 }
 
+function toErrorText(value: unknown): string {
+  if (typeof value === "string") return value
+  if (!value || typeof value !== "object") return ""
+
+  const payload = value as {
+    message?: unknown
+    error?: unknown
+    code?: unknown
+    errors?: Array<{ message?: unknown }>
+  }
+
+  if (typeof payload.message === "string") return payload.message
+  if (typeof payload.error === "string") return payload.error
+  if (Array.isArray(payload.errors) && payload.errors.length > 0) {
+    const first = payload.errors[0]
+    if (typeof first?.message === "string") return first.message
+  }
+  if (typeof payload.code === "string") return `Error code: ${payload.code}`
+  return ""
+}
+
 export default function PublishPage() {
+  const { showError } = useErrorPopup()
   const searchParams = useSearchParams()
   const eventParam = searchParams?.get("event")
   const projectParam = searchParams?.get("project")
@@ -160,6 +183,11 @@ export default function PublishPage() {
         console.error("Failed to load connections:", error)
         setContacts([])
         setSearchError("Could not load your connections right now.")
+        showError({
+          title: "Could not load connections",
+          message: "Your contacts are temporarily unavailable. You can still share by link or email.",
+          severity: "warning",
+        })
       } finally {
         if (isActive) {
           setSearchLoading(false)
@@ -235,6 +263,11 @@ export default function PublishPage() {
       const user = auth.currentUser
       if (!user) {
         console.error('Not authenticated')
+        showError({
+          title: "Session expired",
+          message: "Please sign in again before sending invitations.",
+          severity: "warning",
+        })
         setEmailSendStatus({ success: 0, failed: emailsToSend.length, errors: emailsToSend.map(e => ({ email: e, error: 'Not authenticated' })) })
         setIsSendingEmails(false)
         return
@@ -259,11 +292,16 @@ export default function PublishPage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+        const errorText = toErrorText(errorData?.error) || toErrorText(errorData) || 'We could not send invitations right now. Please try again.'
         console.error('Failed to send invitations:', errorData)
+        showError({
+          title: "Invitations not sent",
+          message: errorText,
+        })
         setEmailSendStatus({ 
           success: 0, 
           failed: emailsToSend.length, 
-          errors: emailsToSend.map(e => ({ email: e, error: errorData.error || 'Failed to send' })) 
+          errors: emailsToSend.map(e => ({ email: e, error: errorText || 'Failed to send' })) 
         })
         setIsSendingEmails(false)
         return
@@ -276,7 +314,12 @@ export default function PublishPage() {
       const emailResults = result.emailResults || []
       const successCount = emailResults.filter((r: any) => r.success).length
       const failedCount = emailResults.filter((r: any) => !r.success).length
-      const errors = emailResults.filter((r: any) => !r.success).map((r: any) => ({ email: r.email, error: r.error }))
+      const errors = emailResults
+        .filter((r: any) => !r.success)
+        .map((r: any) => ({
+          email: r.email,
+          error: toErrorText(r.error) || 'Failed to send',
+        }))
 
       setEmailSendStatus({ success: successCount, failed: failedCount, errors })
 
@@ -292,6 +335,10 @@ export default function PublishPage() {
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to send invitations:', error)
+      showError({
+        title: "Failed to send invitations",
+        message: errorMsg || "Something unexpected happened while sending invitations.",
+      })
       setEmailSendStatus({ 
         success: 0, 
         failed: emailsToSend.length, 

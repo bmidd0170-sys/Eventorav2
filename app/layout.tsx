@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Script from 'next/script'
 import { Inter, Poppins } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { ErrorPopupProvider } from '@/components/providers/error-popup-provider'
 import './globals.css'
 import { BrandProvider } from '@/components/brand/brand-provider'
 import { Toaster } from '@/components/ui/toaster'
@@ -55,7 +56,7 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${poppins.variable} font-sans antialiased`}>
         <BrandProvider>
-          {children}
+          <ErrorPopupProvider>{children}</ErrorPopupProvider>
         </BrandProvider>
         <Toaster />
         {process.env.NODE_ENV === 'production' && <Analytics />}

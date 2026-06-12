@@ -4,9 +4,18 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
+import QRCode from "qrcode"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { auth } from "@/lib/auth/client"
 import { getConnections } from "@/lib/connections"
 import { useErrorPopup } from "@/components/providers/error-popup-provider"
@@ -93,6 +102,12 @@ export default function PublishPage() {
   const [emailMessage, setEmailMessage] = useState("I'd love for you to join me at this special event. Click the link below to view the invitation and RSVP.")
   const [isSendingEmails, setIsSendingEmails] = useState(false)
   const [emailSendStatus, setEmailSendStatus] = useState<{ success: number; failed: number; errors: { email: string; error: string }[] } | null>(null)
+  const [isQrDialogOpen, setIsQrDialogOpen] = useState(false)
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState("")
+  const [isQrLoading, setIsQrLoading] = useState(false)
+  const [isInlineQrLoading, setIsInlineQrLoading] = useState(false)
+  const [isQrCopied, setIsQrCopied] = useState(false)
+  const [qrError, setQrError] = useState("")
 
   useEffect(() => {
     setIsPublished(shareMode)
@@ -138,6 +153,53 @@ export default function PublishPage() {
 
     setInviteLink(`${window.location.origin}${invitePath}`)
   }, [invitePath])
+
+  useEffect(() => {
+    let isActive = true
+
+    const generateInlineQrCode = async () => {
+      if (!inviteLink) {
+        setQrCodeDataUrl("")
+        setQrError("")
+        return
+      }
+
+      setIsInlineQrLoading(true)
+
+      try {
+        const dataUrl = await QRCode.toDataURL(inviteLink, {
+          width: 512,
+          margin: 1,
+          errorCorrectionLevel: "M",
+        })
+
+        if (!isActive) {
+          return
+        }
+
+        setQrCodeDataUrl(dataUrl)
+        setQrError("")
+      } catch (error) {
+        if (!isActive) {
+          return
+        }
+
+        console.error("Failed to generate inline QR code:", error)
+        setQrCodeDataUrl("")
+        setQrError("Could not generate a QR code right now. Please try again.")
+      } finally {
+        if (isActive) {
+          setIsInlineQrLoading(false)
+        }
+      }
+    }
+
+    void generateInlineQrCode()
+
+    return () => {
+      isActive = false
+    }
+  }, [inviteLink])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -220,6 +282,76 @@ export default function PublishPage() {
     navigator.clipboard.writeText(inviteLink)
     setLinkCopied(true)
     setTimeout(() => setLinkCopied(false), 2000)
+  }
+
+  const handleOpenQrCode = async () => {
+    if (!inviteLink) {
+      setQrError("This invitation link is not ready yet.")
+      setIsQrDialogOpen(true)
+      return
+    }
+
+    setIsQrDialogOpen(true)
+
+    if (qrCodeDataUrl) {
+      return
+    }
+
+    setIsQrLoading(true)
+    setQrError("")
+
+    try {
+      const dataUrl = await QRCode.toDataURL(inviteLink, {
+        width: 512,
+        margin: 1,
+        errorCorrectionLevel: "M",
+      })
+      setQrCodeDataUrl(dataUrl)
+    } catch (error) {
+      console.error("Failed to generate QR code:", error)
+      setQrCodeDataUrl("")
+      setQrError("Could not generate a QR code right now. Please try again.")
+    } finally {
+      setIsQrLoading(false)
+    }
+  }
+
+  const handleCopyQrCodeImage = async () => {
+    if (!qrCodeDataUrl) {
+      return
+    }
+
+    try {
+      if (!navigator.clipboard?.write || typeof ClipboardItem === "undefined") {
+        throw new Error("Clipboard image API unavailable")
+      }
+
+      const qrBlob = await fetch(qrCodeDataUrl).then((response) => response.blob())
+      await navigator.clipboard.write([new ClipboardItem({ [qrBlob.type]: qrBlob })])
+      setIsQrCopied(true)
+      setTimeout(() => setIsQrCopied(false), 2000)
+    } catch (error) {
+      console.error("Failed to copy QR code image:", error)
+      showError({
+        title: "Copy image unavailable",
+        message: "Your browser blocked image copy. Use Download PNG instead.",
+        severity: "warning",
+      })
+    }
+  }
+
+  const handleDownloadQrCode = () => {
+    if (!qrCodeDataUrl) {
+      return
+    }
+
+    const eventSlug = (resolvedEventId || "event").replace(/[^a-zA-Z0-9-_]/g, "")
+    const anchor = document.createElement("a")
+    anchor.href = qrCodeDataUrl
+    anchor.download = `event-${eventSlug}-qr.png`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
   }
 
   const handlePublish = () => {
@@ -540,13 +672,14 @@ export default function PublishPage() {
                     )}
                   </Button>
                 </div>
+
               </div>
 
               {/* Share options */}
               <div>
                 <label className="text-sm font-medium mb-3 block">Quick Share</label>
                 <div className="flex gap-3">
-                  <Button variant="outline" className="flex-1">
+                  <Button variant="outline" className="flex-1" onClick={handleOpenQrCode}>
                     <QrCode className="w-4 h-4 mr-2" />
                     QR Code
                   </Button>
@@ -837,6 +970,51 @@ export default function PublishPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Event QR Code</DialogTitle>
+            <DialogDescription>
+              Guests can scan this to open your event invitation.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-xl border border-border/50 bg-secondary/40 p-4">
+            <div className="aspect-square w-full rounded-lg bg-background flex items-center justify-center">
+              {isQrLoading && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating QR code...
+                </div>
+              )}
+
+              {!isQrLoading && qrError && (
+                <div className="text-sm text-destructive text-center max-w-xs">{qrError}</div>
+              )}
+
+              {!isQrLoading && !qrError && qrCodeDataUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={qrCodeDataUrl} alt="Invitation QR code" className="w-full max-w-72 h-auto" />
+              )}
+            </div>
+          </div>
+
+          <div className="text-xs text-muted-foreground truncate">{inviteLink}</div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={handleOpenQrCode} disabled={isQrLoading || !inviteLink}>
+              Regenerate
+            </Button>
+            <Button variant="outline" onClick={handleCopyQrCodeImage} disabled={!qrCodeDataUrl || isQrLoading}>
+              {isQrCopied ? "Copied Image" : "Copy Image"}
+            </Button>
+            <Button onClick={handleDownloadQrCode} disabled={!qrCodeDataUrl || isQrLoading}>
+              Download PNG
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -47,7 +47,6 @@ export function PublicInvitationView({
 
         <div className="rounded-2xl border border-border/60 bg-card shadow-xl overflow-hidden" style={getInvitationBrandStyles(brand)}>
           <InvitationPageRenderer
-            eventId={eventId}
             page={currentPage}
             rsvpResponse={rsvpResponse}
             setRsvpResponse={setRsvpResponse}

@@ -25,18 +25,52 @@ export function GoogleMap({ address, venue, className = "w-full h-full" }: Googl
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstanceRef = useRef<any | null>(null)
     const [showPin, setShowPin] = useState(false)
+    const [isMapsReady, setIsMapsReady] = useState(false)
 
     useEffect(() => {
-        if (!mapRef.current || !window.google) return
+        if (window.google?.maps) {
+            setIsMapsReady(true)
+            return
+        }
 
-        // Create map
-        const map = new window.google.maps.Map(mapRef.current, {
-            zoom: 15,
-            mapTypeControl: false,
-            fullscreenControl: false,
-        })
+        let attempts = 0
+        const maxAttempts = 60
+        const poll = window.setInterval(() => {
+            if (window.google?.maps) {
+                setIsMapsReady(true)
+                window.clearInterval(poll)
+                return
+            }
 
-        mapInstanceRef.current = map
+            attempts += 1
+            if (attempts >= maxAttempts) {
+                window.clearInterval(poll)
+            }
+        }, 250)
+
+        const mapScript = document.querySelector<HTMLScriptElement>('script[src*="maps.googleapis.com/maps/api/js"]')
+        const onLoad = () => setIsMapsReady(true)
+
+        mapScript?.addEventListener("load", onLoad)
+
+        return () => {
+            window.clearInterval(poll)
+            mapScript?.removeEventListener("load", onLoad)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (!mapRef.current || !isMapsReady || !window.google?.maps) return
+
+        if (!mapInstanceRef.current) {
+            mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+                zoom: 15,
+                mapTypeControl: false,
+                fullscreenControl: false,
+            })
+        }
+
+        const map = mapInstanceRef.current
 
         // Geocode the address and center map
         const geocoder = new window.google.maps.Geocoder()
@@ -53,11 +87,16 @@ export function GoogleMap({ address, venue, className = "w-full h-full" }: Googl
                 setShowPin(false)
             }
         })
-    }, [address, venue])
+    }, [address, venue, isMapsReady])
 
     return (
         <div className="relative overflow-hidden" aria-label={venue || address || "Location map"}>
             <div ref={mapRef} className={className} />
+            {!isMapsReady && (
+                <div className="absolute inset-0 flex items-center justify-center bg-secondary/50">
+                    <p className="text-xs text-muted-foreground">Loading map...</p>
+                </div>
+            )}
             {showPin && (
                 <div className="pointer-events-none absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-full">
                     <div className="flex flex-col items-center">

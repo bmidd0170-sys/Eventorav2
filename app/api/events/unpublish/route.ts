@@ -43,7 +43,15 @@ export async function POST(req: NextRequest) {
       return eventResult.response
     }
 
-    const event = eventResult.event
+    const event = eventResult.event as unknown as {
+      id: string
+      title: string
+      status: string
+      user: {
+        displayName: string | null
+        email: string
+      }
+    }
 
     if (event.status !== "published") {
       return conflict("Invitation is already unpublished", { eventId, status: event.status })

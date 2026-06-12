@@ -26,7 +26,7 @@ function parseDateLabel(value: string) {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed
 }
 
-function parseTimeLabel(value: string) {
+function parseTimeLabel(value: string): { hour: number; minute: number; period: "AM" | "PM" } {
   const normalized = value.trim().toUpperCase()
   const match = value.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i)
 
@@ -38,13 +38,13 @@ function parseTimeLabel(value: string) {
     }
 
     const hour = Math.min(Math.max(Number(twelveHourMatch[1]), 1), 12)
-    const period = twelveHourMatch[2]?.toUpperCase() === "AM" ? "AM" : "PM"
+    const period: "AM" | "PM" = twelveHourMatch[2]?.toUpperCase() === "AM" ? "AM" : "PM"
     return { hour, minute: 0, period }
   }
 
   let hour = Number(match[1])
   const minute = Number(match[2])
-  const period = match[3].toUpperCase() === "AM" ? "AM" : "PM"
+  const period: "AM" | "PM" = match[3].toUpperCase() === "AM" ? "AM" : "PM"
 
   if (hour === 0) hour = 12
   if (hour > 12) hour -= 12

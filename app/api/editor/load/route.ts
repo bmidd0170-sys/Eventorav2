@@ -60,7 +60,14 @@ export async function POST(req: NextRequest) {
       return eventResult.response
     }
 
-    const event = eventResult.event
+    const event = eventResult.event as unknown as {
+      id: string
+      title: string
+      description: string | null
+      pagesData: unknown
+      status: string
+      updatedAt: Date
+    }
 
     // pagesData may be an array (legacy) or an object { pages, messages }
     let pages = [] as any

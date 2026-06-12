@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { getAuthenticatedDbUser } from "@/lib/auth/server"
+import { getUserBrandVoice } from "@/lib/brand-voice"
 import { buildEventCancelledEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
 import { defaultNotificationSettings } from "@/lib/notification-settings"
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
         title: true,
         startDate: true,
         status: true,
+        userId: true,
         user: {
           select: {
             notificationSettings: true,
@@ -81,23 +83,38 @@ export async function POST(req: NextRequest) {
             hour: "numeric",
             minute: "2-digit",
           })
-          const emailContent = buildEventCancelledEmail({
-            eventTitle: event.title,
-            eventDateLabel: dateLabel,
-            eventTimeLabel: timeLabel,
-            eventUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/i/${encodeURIComponent(event.id)}`,
-          })
+          
+          return (async () => {
+            let ownerSignature: string | undefined
+            let ownerTone: "formal" | "casual" | "playful" | "warm" | "direct" | undefined
+            try {
+              const ownerVoice = await getUserBrandVoice(event.userId)
+              ownerTone = ownerVoice?.tone
+              ownerSignature = ownerVoice?.signature
+            } catch (error) {
+              console.warn("Failed to fetch owner's brand voice", error)
+            }
 
-          return event.invitations.map((invitation) =>
-            sendEmail({
-              to: invitation.guestEmail,
-              subject: emailContent.subject,
-              text: emailContent.text,
-              html: emailContent.html,
-              fromName: event.title,
+            const emailContent = buildEventCancelledEmail({
+              eventTitle: event.title,
+              eventDateLabel: dateLabel,
+              eventTimeLabel: timeLabel,
+              eventUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/i/${encodeURIComponent(event.id)}`,
+              tone: ownerTone,
+              signature: ownerSignature,
             })
-          )
-        })
+
+            return event.invitations.map((invitation) =>
+              sendEmail({
+                to: invitation.guestEmail,
+                subject: emailContent.subject,
+                text: emailContent.text,
+                html: emailContent.html,
+                fromName: event.title,
+              })
+            )
+          })()
+        }).flat()
     )
 
     const deleted = await prisma.event.deleteMany({

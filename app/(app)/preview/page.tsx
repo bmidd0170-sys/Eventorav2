@@ -258,6 +258,7 @@ export default function PreviewPage() {
                 rsvpResponse={rsvpResponse}
                 setRsvpResponse={setRsvpResponse}
                 brand={activeBrand}
+                onNavigateNext={goToNextPage}
               />
             </div>
           </div>

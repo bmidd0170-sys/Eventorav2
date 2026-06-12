@@ -269,6 +269,12 @@ function ProfileSettings() {
   )
 }
 
+type PersonalityQuestions = {
+  formalityLevel?: string
+  useHumor?: string
+  tone?: string
+}
+
 function BrandSettings() {
   const { toast } = useToast()
   const { setBrand } = useBrand()
@@ -287,6 +293,12 @@ function BrandSettings() {
     { id: "1", name: "Heading", value: "Poppins" },
     { id: "2", name: "Body", value: "Inter" },
   ])
+
+  const [toneTemplate, setToneTemplate] = useState<string>("")
+  const [tone, setTone] = useState<string>("")
+  const [exampleSentences, setExampleSentences] = useState<string>("")
+  const [emailSignature, setEmailSignature] = useState<string>("")
+  const [personalityQuestionnaireAnswers, setPersonalityQuestionnaireAnswers] = useState<PersonalityQuestions>({})
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -311,6 +323,24 @@ function BrandSettings() {
           { id: "1", name: "Heading", value: brand.headingFont || "Poppins" },
           { id: "2", name: "Body", value: brand.bodyFont || "Inter" },
         ])
+
+        // Load personality settings from DB via API
+        try {
+          const response = await fetchWithAuth("/api/brand-settings", { method: "GET" })
+          if (response.ok) {
+            const data = await response.json()
+            const settings = data.settings
+            setToneTemplate(settings.toneTemplate || "")
+            setTone(settings.tone || "")
+            setExampleSentences(settings.exampleSentences ? settings.exampleSentences.join("\n") : "")
+            setEmailSignature(settings.emailSignature || "")
+            if (settings.personalityQuestionnaireAnswers) {
+              setPersonalityQuestionnaireAnswers(settings.personalityQuestionnaireAnswers)
+            }
+          }
+        } catch (error) {
+          console.warn("Failed to load personality settings", error)
+        }
       } catch (error) {
         console.warn("Failed to load brand settings", error)
       } finally {
@@ -341,8 +371,24 @@ function BrandSettings() {
 
     setSaving(true)
     try {
+      // Save visual branding to localStorage
       await setBrand(nextBrand)
-      toast({ title: "Saved", description: "Brand kit saved" })
+      
+      // Save personality settings to DB
+      await fetchWithAuth("/api/brand-settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...nextBrand,
+          toneTemplate: toneTemplate || undefined,
+          tone: tone || undefined,
+          exampleSentences: exampleSentences ? exampleSentences.split("\n").filter((s) => s.trim()) : undefined,
+          emailSignature: emailSignature || undefined,
+          personalityQuestionnaireAnswers: Object.keys(personalityQuestionnaireAnswers).length > 0 ? personalityQuestionnaireAnswers : undefined,
+        }),
+      })
+      
+      toast({ title: "Saved", description: "Brand kit and personality settings saved" })
     } catch (error) {
       console.error("Failed to save brand kit", error)
       toast({
@@ -490,6 +536,135 @@ function BrandSettings() {
               </select>
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* Personality & Tone */}
+      <section className="bg-card rounded-xl border border-border/50 p-6">
+        <h2 className="text-lg font-medium mb-4">Your Personality & Tone</h2>
+        <p className="text-sm text-muted-foreground mb-6">
+          Define how the AI writes on your behalf. This will make your invitations and emails feel authentically like you.
+        </p>
+        
+        <div className="space-y-6">
+          {/* Tone Template Selector */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Communication Style (Predefined)</label>
+            <select
+              value={toneTemplate}
+              onChange={(e) => setToneTemplate(e.target.value)}
+              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              <option value="">Select a style...</option>
+              <option value="casual">Casual & Friendly</option>
+              <option value="formal">Formal & Professional</option>
+              <option value="playful">Playful & Fun</option>
+              <option value="direct">Direct & Minimal</option>
+              <option value="warm">Warm & Welcoming</option>
+            </select>
+          </div>
+
+          {/* Personality Questionnaire */}
+          <div>
+            <label className="text-sm font-medium mb-3 block">Tell Us About Yourself</label>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">How formal are you typically?</label>
+                <select
+                  value={personalityQuestionnaireAnswers.formalityLevel || ""}
+                  onChange={(e) => setPersonalityQuestionnaireAnswers({
+                    ...personalityQuestionnaireAnswers,
+                    formalityLevel: e.target.value || undefined
+                  })}
+                  className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">Select...</option>
+                  <option value="very_formal">Very Formal</option>
+                  <option value="formal">Formal</option>
+                  <option value="neutral">Neutral</option>
+                  <option value="casual">Casual</option>
+                  <option value="very_casual">Very Casual</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">Do you use humor?</label>
+                <select
+                  value={personalityQuestionnaireAnswers.useHumor || ""}
+                  onChange={(e) => setPersonalityQuestionnaireAnswers({
+                    ...personalityQuestionnaireAnswers,
+                    useHumor: e.target.value || undefined
+                  })}
+                  className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">Select...</option>
+                  <option value="never">Rarely</option>
+                  <option value="sometimes">Sometimes</option>
+                  <option value="often">Often</option>
+                  <option value="always">Always</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm text-muted-foreground mb-2 block">Describe your tone in one word</label>
+                <input
+                  type="text"
+                  value={personalityQuestionnaireAnswers.tone || ""}
+                  onChange={(e) => setPersonalityQuestionnaireAnswers({
+                    ...personalityQuestionnaireAnswers,
+                    tone: e.target.value || undefined
+                  })}
+                  placeholder="e.g., warm, witty, direct, friendly..."
+                  className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Example Sentences */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Example Sentences (How You Write)</label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Paste 2-3 sentences that sound like you. This helps the AI understand your voice better.
+            </p>
+            <textarea
+              value={exampleSentences}
+              onChange={(e) => setExampleSentences(e.target.value)}
+              placeholder="e.g., 'Let's make something amazing together. You're going to love this. Can't wait to see you there!'"
+              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              rows={3}
+            />
+          </div>
+
+          {/* Freeform Description */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Your Voice (Freeform)</label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Describe how you communicate. Be specific about your personality, quirks, and writing style.
+            </p>
+            <textarea
+              value={tone}
+              onChange={(e) => setTone(e.target.value)}
+              placeholder="e.g., 'I'm sarcastic and use emojis. I write like I'm texting a friend. I love puns and dad jokes.'"
+              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              rows={4}
+            />
+          </div>
+
+          {/* Email Signature */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Email Signature (Optional)</label>
+            <p className="text-xs text-muted-foreground mb-2">
+              Custom sign-off for emails and messages.
+            </p>
+            <textarea
+              value={emailSignature}
+              onChange={(e) => setEmailSignature(e.target.value)}
+              placeholder="e.g., 'Cheers, Sarah' or 'Looking forward, Team XYZ'"
+              className="w-full bg-secondary rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              rows={2}
+            />
+          </div>
         </div>
       </section>
 

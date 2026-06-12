@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { buildEventReminderEmail } from "@/lib/email-templates"
+import { getUserBrandVoice } from "@/lib/brand-voice"
 import { sendEmail } from "@/lib/email"
 import { prisma } from "@/lib/db"
 import { defaultNotificationSettings } from "@/lib/notification-settings"
@@ -35,6 +36,7 @@ export async function POST(req: NextRequest) {
                 id: true,
                 title: true,
                 startDate: true,
+                userId: true,
                 user: {
                     select: {
                         notificationSettings: true,
@@ -75,24 +77,39 @@ export async function POST(req: NextRequest) {
                     minute: "2-digit",
                 })
 
-                const emailContent = buildEventReminderEmail({
-                    eventTitle: event.title,
-                    eventDateLabel: dateLabel,
-                    eventTimeLabel: timeLabel,
-                    eventUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/i/${encodeURIComponent(event.id)}`,
-                })
+                // Fetch event owner's personality settings
+                return (async () => {
+                    let ownerSignature: string | undefined
+                    let ownerTone: "formal" | "casual" | "playful" | "warm" | "direct" | undefined
+                    try {
+                        const ownerVoice = await getUserBrandVoice(event.userId)
+                        ownerTone = ownerVoice?.tone
+                        ownerSignature = ownerVoice?.signature
+                    } catch (error) {
+                        console.warn("Failed to fetch owner's brand voice", error)
+                    }
 
-                return event.invitations.map(async (invitation) => {
-                    await sendEmail({
-                        to: invitation.guestEmail,
-                        subject: emailContent.subject,
-                        text: emailContent.text,
-                        html: emailContent.html,
-                        fromName: event.title,
+                    const emailContent = buildEventReminderEmail({
+                        eventTitle: event.title,
+                        eventDateLabel: dateLabel,
+                        eventTimeLabel: timeLabel,
+                        eventUrl: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/i/${encodeURIComponent(event.id)}`,
+                        tone: ownerTone,
+                        signature: ownerSignature,
                     })
-                    sentCount += 1
-                })
-            })
+
+                    return event.invitations.map(async (invitation) => {
+                        await sendEmail({
+                            to: invitation.guestEmail,
+                            subject: emailContent.subject,
+                            text: emailContent.text,
+                            html: emailContent.html,
+                            fromName: event.title,
+                        })
+                        sentCount += 1
+                    })
+                })()
+            }).flat()
         )
 
         return ok({ sentCount, eventCount: events.length })

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { getAuthenticatedDbUser, getOwnedEvent } from "@/lib/auth/server"
+import { getUserBrandVoice } from "@/lib/brand-voice"
 import { buildEventUnpublishedEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
 import { prisma } from "@/lib/db"
@@ -75,8 +76,14 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    const ownerVoice = await getUserBrandVoice(authUser.dbUser.id).catch((error) => {
+      console.warn("Failed to fetch owner's brand voice", error)
+      return null
+    })
+
     const emailContent = buildEventUnpublishedEmail({
       eventTitle: event.title,
+      signature: ownerVoice?.signature,
     })
 
     const deliveryResults = await Promise.allSettled(

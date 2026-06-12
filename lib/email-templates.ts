@@ -4,6 +4,8 @@ type EmailTemplate = {
     html: string
 }
 
+type EmailTone = "formal" | "casual" | "playful" | "warm" | "direct"
+
 function escapeHtml(value: string) {
     return value
         .replaceAll("&", "&amp;")
@@ -13,7 +15,45 @@ function escapeHtml(value: string) {
         .replaceAll("'", "&#39;")
 }
 
-function baseHtml(options: { eyebrow: string; headline: string; body: string; ctaLabel?: string; ctaUrl?: string }) {
+function normalizeSignature(signature?: string | null) {
+    const trimmed = signature?.trim()
+    return trimmed ? trimmed : undefined
+}
+
+function signatureHtml(signature?: string | null) {
+    const normalized = normalizeSignature(signature)
+    if (!normalized) {
+        return ""
+    }
+
+    const lines = normalized
+        .split(/\r?\n/)
+        .map((line) => escapeHtml(line))
+        .join("<br>")
+
+    return `<div style="margin-top:24px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.12);"><p style="margin:0;color:#f8fafc;white-space:normal;">${lines}</p></div>`
+}
+
+export function appendEmailSignatureText(text: string, signature?: string | null) {
+    const normalized = normalizeSignature(signature)
+    return normalized ? `${text}\n\n${normalized}` : text
+}
+
+export function appendEmailSignatureHtml(html: string, signature?: string | null) {
+    const normalized = normalizeSignature(signature)
+    if (!normalized) {
+        return html
+    }
+
+    const lines = normalized
+        .split(/\r?\n/)
+        .map((line) => escapeHtml(line))
+        .join("<br>")
+
+    return `${html}<p style="margin-top:20px;">${lines}</p>`
+}
+
+function baseHtml(options: { eyebrow: string; headline: string; body: string; ctaLabel?: string; ctaUrl?: string; signature?: string }) {
     const eyebrow = escapeHtml(options.eyebrow)
     const headline = escapeHtml(options.headline)
 
@@ -30,6 +70,7 @@ function baseHtml(options: { eyebrow: string; headline: string; body: string; ct
           <div style="padding:0 28px 28px;color:#cbd5e1;font-size:16px;line-height:1.7;">
             ${options.body}
             ${options.ctaLabel && options.ctaUrl ? `<div style="margin-top:24px;"><a href="${escapeHtml(options.ctaUrl)}" style="display:inline-block;padding:12px 18px;border-radius:14px;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;">${escapeHtml(options.ctaLabel)}</a></div>` : ""}
+                        ${signatureHtml(options.signature)}
           </div>
         </div>
       </div>
@@ -94,17 +135,53 @@ export function buildRsvpConfirmationEmail(options: {
     guestEmail: string
     guestName?: string | null
     eventUrl?: string
+    tone?: EmailTone
+    signature?: string
 }): EmailTemplate {
     const guestLabel = options.guestName?.trim() || options.guestEmail
+    const tone = options.tone || "formal"
+    
+    let headline = ""
+    let body = ""
+    let thankYouMessage = ""
+    
+    switch (tone) {
+        case "casual":
+            headline = `Got it, ${escapeHtml(guestLabel)} – thanks!`
+            thankYouMessage = `Your ${escapeHtml(options.responseLabel.toLowerCase())} RSVP is all set.`
+            body = `<p>Your ${escapeHtml(options.responseLabel.toLowerCase())} RSVP for <strong>${escapeHtml(options.eventTitle)}</strong> is locked in.</p><p>Can't wait to see you there!</p>`
+            break
+        case "playful":
+            headline = `You're ${escapeHtml(options.responseLabel.toLowerCase())}ing! 🎉`
+            thankYouMessage = `Awesome! Your RSVP for ${escapeHtml(options.eventTitle)} is confirmed.`
+            body = `<p>Your ${escapeHtml(options.responseLabel.toLowerCase())} RSVP for <strong>${escapeHtml(options.eventTitle)}</strong> is officially on the books.</p><p>Let's make this event incredible!</p>`
+            break
+        case "warm":
+            headline = `We're so glad you'll be there, ${escapeHtml(guestLabel)}`
+            thankYouMessage = `Your RSVP has been received.`
+            body = `<p>Thank you for confirming your ${escapeHtml(options.responseLabel.toLowerCase())} RSVP for <strong>${escapeHtml(options.eventTitle)}</strong>.</p><p>We're looking forward to seeing you!</p>`
+            break
+        case "direct":
+            headline = `RSVP confirmed: ${escapeHtml(options.responseLabel)}`
+            thankYouMessage = `Your response has been recorded.`
+            body = `<p>Your ${escapeHtml(options.responseLabel.toLowerCase())} RSVP for ${escapeHtml(options.eventTitle)} is confirmed.</p>`
+            break
+        default: // formal
+            headline = `Thanks ${escapeHtml(guestLabel)}`
+            thankYouMessage = `Your ${escapeHtml(options.responseLabel.toLowerCase())} RSVP for ${escapeHtml(options.eventTitle)} was received.`
+            body = `<p>Your <strong>${escapeHtml(options.responseLabel.toLowerCase())}</strong> RSVP for <strong>${escapeHtml(options.eventTitle)}</strong> has been received.</p>`
+    }
+    
     return {
-        subject: `Your RSVP for ${options.eventTitle} was received`,
-        text: `Thanks ${guestLabel}. Your ${options.responseLabel.toLowerCase()} RSVP for ${options.eventTitle} was received.`,
+        subject: thankYouMessage,
+        text: appendEmailSignatureText(thankYouMessage, options.signature),
         html: baseHtml({
             eyebrow: "RSVP received",
-            headline: `Thanks ${escapeHtml(guestLabel)}`,
-            body: `<p>Your <strong>${escapeHtml(options.responseLabel.toLowerCase())}</strong> RSVP for <strong>${escapeHtml(options.eventTitle)}</strong> has been received.</p>`,
+            headline,
+            body,
             ctaLabel: options.eventUrl ? "View invitation" : undefined,
             ctaUrl: options.eventUrl,
+            signature: options.signature,
         }),
     }
 }
@@ -175,16 +252,52 @@ export function buildEventReminderEmail(options: {
     eventDateLabel: string
     eventTimeLabel: string
     eventUrl?: string
+    tone?: EmailTone
+    signature?: string
 }): EmailTemplate {
+    const tone = options.tone || "formal"
+    
+    let headline = ""
+    let body = ""
+    let subject = ""
+    
+    switch (tone) {
+        case "casual":
+            subject = `Don't forget – ${options.eventTitle} is tomorrow!`
+            headline = `${escapeHtml(options.eventTitle)} is coming up`
+            body = `<p>Just a heads up – your event is happening <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Time to get excited!</p>`
+            break
+        case "playful":
+            subject = `🚨 ${options.eventTitle} – it's almost here!`
+            headline = `${escapeHtml(options.eventTitle)} is happening soon!`
+            body = `<p>Your event is <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Are you ready? We are! 🎉</p>`
+            break
+        case "warm":
+            subject = `Reminder: ${options.eventTitle} is just around the corner`
+            headline = `${escapeHtml(options.eventTitle)} is coming up soon`
+            body = `<p>We hope you're excited – your event is scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Take a final look to make sure everything is perfect.</p>`
+            break
+        case "direct":
+            subject = `Reminder: ${options.eventTitle} – ${options.eventDateLabel} at ${options.eventTimeLabel}`
+            headline = `${escapeHtml(options.eventTitle)} reminder`
+            body = `<p>Event: ${escapeHtml(options.eventTitle)}</p><p>Date: ${escapeHtml(options.eventDateLabel)}</p><p>Time: ${escapeHtml(options.eventTimeLabel)}</p>`
+            break
+        default: // formal
+            subject = `Reminder: ${options.eventTitle} is coming up soon`
+            headline = `${escapeHtml(options.eventTitle)} is coming up soon`
+            body = `<p>Your event is scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Use this reminder to follow up with guests or finish your final checks.</p>`
+    }
+    
     return {
-        subject: `Reminder: ${options.eventTitle} is coming up soon`,
-        text: `${options.eventTitle} is coming up on ${options.eventDateLabel} at ${options.eventTimeLabel}.`,
+        subject,
+        text: appendEmailSignatureText(`${options.eventTitle} is coming up on ${options.eventDateLabel} at ${options.eventTimeLabel}.`, options.signature),
         html: baseHtml({
             eyebrow: "Event reminder",
-            headline: `${escapeHtml(options.eventTitle)} is coming up soon`,
-            body: `<p>Your event is scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong>.</p><p>Use this reminder to follow up with guests or finish your final checks.</p>`,
+            headline,
+            body,
             ctaLabel: options.eventUrl ? "Open event" : undefined,
             ctaUrl: options.eventUrl,
+            signature: options.signature,
         }),
     }
 }
@@ -194,16 +307,52 @@ export function buildEventCancelledEmail(options: {
     eventDateLabel: string
     eventTimeLabel: string
     eventUrl?: string
+    tone?: EmailTone
+    signature?: string
 }): EmailTemplate {
+    const tone = options.tone || "formal"
+    
+    let headline = ""
+    let body = ""
+    let subject = ""
+    
+    switch (tone) {
+        case "casual":
+            subject = `Quick update: ${options.eventTitle} isn't happening`
+            headline = `${escapeHtml(options.eventTitle)} has been called off`
+            body = `<p>We wanted to let you know that ${escapeHtml(options.eventTitle)} (scheduled for ${escapeHtml(options.eventDateLabel)} at ${escapeHtml(options.eventTimeLabel)}) is no longer happening.</p><p>Sorry about that – stay tuned for future events!</p>`
+            break
+        case "playful":
+            subject = `Plot twist: ${options.eventTitle} is off`
+            headline = `${escapeHtml(options.eventTitle)} isn't happening 📅`
+            body = `<p>Just wanted to give you the heads up – ${escapeHtml(options.eventTitle)} (${escapeHtml(options.eventDateLabel)}) is canceled.</p><p>We'll be back with something better soon!</p>`
+            break
+        case "warm":
+            subject = `An important update about ${options.eventTitle}`
+            headline = `${escapeHtml(options.eventTitle)} has been canceled`
+            body = `<p>We're reaching out to let you know that ${escapeHtml(options.eventTitle)} has been canceled.</p><p>Thank you for your understanding. We look forward to seeing you at future events.</p>`
+            break
+        case "direct":
+            subject = `Canceled: ${options.eventTitle}`
+            headline = `${escapeHtml(options.eventTitle)} has been canceled`
+            body = `<p>Event: ${escapeHtml(options.eventTitle)}</p><p>Scheduled: ${escapeHtml(options.eventDateLabel)} at ${escapeHtml(options.eventTimeLabel)}</p><p>Status: Canceled</p>`
+            break
+        default: // formal
+            subject = `${options.eventTitle} has been canceled`
+            headline = `${escapeHtml(options.eventTitle)} has been canceled`
+            body = `<p>The event scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong> is no longer happening.</p><p>We will keep the invitation record closed out on Invyra.</p>`
+    }
+    
     return {
-        subject: `${options.eventTitle} has been canceled`,
-        text: `${options.eventTitle} scheduled for ${options.eventDateLabel} at ${options.eventTimeLabel} has been canceled.`,
+        subject,
+        text: appendEmailSignatureText(`${options.eventTitle} scheduled for ${options.eventDateLabel} at ${options.eventTimeLabel} has been canceled.`, options.signature),
         html: baseHtml({
             eyebrow: "Event canceled",
-            headline: `${escapeHtml(options.eventTitle)} has been canceled`,
-            body: `<p>The event scheduled for <strong>${escapeHtml(options.eventDateLabel)}</strong> at <strong>${escapeHtml(options.eventTimeLabel)}</strong> is no longer happening.</p><p>We will keep the invitation record closed out on Invyra.</p>`,
+            headline,
+            body,
             ctaLabel: options.eventUrl ? "Review event" : undefined,
             ctaUrl: options.eventUrl,
+            signature: options.signature,
         }),
     }
 }
@@ -211,16 +360,18 @@ export function buildEventCancelledEmail(options: {
 export function buildEventUnpublishedEmail(options: {
     eventTitle: string
     eventUrl?: string
+    signature?: string
 }) {
     return {
         subject: `${options.eventTitle} is no longer published`,
-        text: `${options.eventTitle} has been unpublished and is no longer live.`,
+        text: appendEmailSignatureText(`${options.eventTitle} has been unpublished and is no longer live.`, options.signature),
         html: baseHtml({
             eyebrow: "Event update",
             headline: `${escapeHtml(options.eventTitle)} is no longer live`,
             body: `<p>The event has been unpublished and is no longer available to new guests.</p><p>You can check back later if it is republished.</p>`,
             ctaLabel: options.eventUrl ? "Open dashboard" : undefined,
             ctaUrl: options.eventUrl,
+            signature: options.signature,
         }),
     }
 }

@@ -1,10 +1,19 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { InvitationPageRenderer, getInvitationBrandStyles } from "@/components/invitation/invitation-page-renderer"
 import type { BrandSettings } from "@/lib/branding"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { auth } from "@/lib/firebase"
+import { onAuthStateChanged } from "firebase/auth"
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react"
 
 type InvitationPage = {
   id: string
@@ -25,9 +34,48 @@ export function PublicInvitationView({
 }) {
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [rsvpResponse, setRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
+  const [showSignupPrompt, setShowSignupPrompt] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const promptShownRef = useRef(false)
 
   const totalPages = pages.length
   const currentPage = pages[currentPageIndex]
+  const isOnFinalPage = currentPageIndex === totalPages - 1
+
+  // Track auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setIsLoggedIn(!!user)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  // Start/reset idle timer when on the final page and not logged in
+  useEffect(() => {
+    if (!isOnFinalPage || isLoggedIn || isLoggedIn === null || promptShownRef.current) return
+
+    const IDLE_MS = 5000
+    const interactionEvents = ["mousemove", "keydown", "touchstart", "scroll", "click"] as const
+
+    const resetTimer = () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = setTimeout(() => {
+        if (!promptShownRef.current) {
+          promptShownRef.current = true
+          setShowSignupPrompt(true)
+        }
+      }, IDLE_MS)
+    }
+
+    resetTimer()
+    interactionEvents.forEach((e) => window.addEventListener(e, resetTimer, { passive: true }))
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
+      interactionEvents.forEach((e) => window.removeEventListener(e, resetTimer))
+    }
+  }, [isOnFinalPage, isLoggedIn])
 
   const subtitle = useMemo(() => {
     if (!currentPage?.type) {
@@ -51,6 +99,7 @@ export function PublicInvitationView({
             rsvpResponse={rsvpResponse}
             setRsvpResponse={setRsvpResponse}
             brand={brand}
+            onNavigateNext={() => setCurrentPageIndex((index) => Math.min(totalPages - 1, index + 1))}
           />
         </div>
 
@@ -83,6 +132,38 @@ export function PublicInvitationView({
           </Button>
         </div>
       </div>
+
+      <Dialog open={showSignupPrompt} onOpenChange={setShowSignupPrompt}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Create your own invitations
+            </DialogTitle>
+            <DialogDescription>
+              Loved this invitation? Sign up free and start building beautiful event invitations in minutes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 pt-2">
+            <Button
+              className="w-full"
+              onClick={() => {
+                setShowSignupPrompt(false)
+                window.location.href = "/get-started"
+              }}
+            >
+              Create a free account
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full text-muted-foreground"
+              onClick={() => setShowSignupPrompt(false)}
+            >
+              Maybe later
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

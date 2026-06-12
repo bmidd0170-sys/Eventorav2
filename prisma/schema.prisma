@@ -24,6 +24,7 @@ model User {
   invitations      Invitation[]
   guestLists       GuestList[]
   notificationSettings UserNotificationSettings?
+  brand            UserBrand?
   socialConnections SocialConnection[]
   connectedSocialConnections SocialConnection[] @relation("ConnectedUser")
   connectionRequestsSent ConnectionRequest[] @relation("ConnectionRequestsSent")
@@ -55,6 +56,39 @@ model UserNotificationSettings {
 
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model UserBrand {
+  id                              String   @id @default(cuid())
+  userId                          String   @unique
+  user                            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Visual branding
+  primaryColor                    String?  @default("#000000")
+  secondaryColor                  String?  @default("#FFFFFF")
+  accentColor                     String?  @default("#0066CC")
+  headingFont                     String?  @default("Inter")
+  bodyFont                        String?  @default("Inter")
+  logoDataUrl                     String?  // Base64-encoded image; consider URL alternative if too large
+
+  // Copy/defaults
+  defaultHeadline                 String?
+  defaultSubheadline              String?
+  defaultCtaLabel                 String?
+
+  // Personality & tone
+  toneTemplate                    String?  // casual, formal, playful, professional, direct, friendly
+  tone                            String?  // Free-text description of voice/personality
+  exampleSentences                String?  // JSON array of example sentences
+  personalityQuestionnaireAnswers Json?    // JSON object with questionnaire answers
+
+  // Email personalization
+  emailSignature                  String?  // Custom email sign-off
+
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   @@index([userId])
 }

@@ -2,6 +2,7 @@ import { randomUUID } from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 
 import { getAuthenticatedDbUser } from "@/lib/auth/server"
+import { getUserBrandVoice } from "@/lib/brand-voice"
 import { buildRsvpConfirmationEmail, buildRsvpUpdateEmail } from "@/lib/email-templates"
 import { sendEmail } from "@/lib/email"
 import { prisma } from "@/lib/db"
@@ -86,12 +87,25 @@ export async function POST(req: NextRequest) {
             minute: "2-digit",
         })
 
+        // Fetch event owner's personality settings
+        let ownerSignature: string | undefined
+        let ownerTone: "formal" | "casual" | "playful" | "warm" | "direct" | undefined
+        try {
+            const ownerVoice = await getUserBrandVoice(event.userId)
+            ownerTone = ownerVoice?.tone
+            ownerSignature = ownerVoice?.signature
+        } catch (error) {
+            console.warn("Failed to fetch owner's brand voice", error)
+        }
+
         const guestEmailContent = buildRsvpConfirmationEmail({
             eventTitle: event.title,
             responseLabel,
             guestEmail,
             guestName,
             eventUrl,
+            tone: ownerTone,
+            signature: ownerSignature,
         })
         const ownerSettings = event.user.notificationSettings
             ? { ...defaultNotificationSettings, ...event.user.notificationSettings }

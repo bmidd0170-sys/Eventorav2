@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { getUserBrandVoice } from "@/lib/brand-voice"
 import { jwtDecode } from "jwt-decode"
 import { randomBytes } from "crypto"
 import { sendEmail } from "@/lib/email"
+import { appendEmailSignatureHtml, appendEmailSignatureText } from "@/lib/email-templates"
 
 export async function POST(req: NextRequest) {
   try {
@@ -87,20 +89,25 @@ export async function POST(req: NextRequest) {
     // Send emails (call your email service)
     const emailResults: { email: string; success: boolean; error?: string }[] = []
     const appUrl = req.nextUrl.origin
+    const ownerVoice = await getUserBrandVoice(dbUser.id).catch((error) => {
+      console.warn("Failed to fetch owner's brand voice", error)
+      return null
+    })
 
     for (const email of emails) {
       try {
         const inviteUrl = `${appUrl}/i/${encodeURIComponent(eventId)}`
+        const inviteMessage = message || "You're invited!"
 
-        const htmlEmail = `
-          <p>${message?.replace(/\n/g, '<br>') || "You're invited!"}</p>
+        const htmlEmail = appendEmailSignatureHtml(`
+          <p>${inviteMessage.replace(/\n/g, '<br>')}</p>
           <p><a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 16px 0;">View Invitation</a></p>
-        `
+        `, ownerVoice?.signature)
 
         await sendEmail({
           to: email,
           subject: subject || "You're Invited!",
-          text: `${message || "You're invited!"}\n\n${inviteUrl}`,
+          text: appendEmailSignatureText(`${inviteMessage}\n\n${inviteUrl}`, ownerVoice?.signature),
           html: htmlEmail,
           fromName: event.title,
         })

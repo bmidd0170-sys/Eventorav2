@@ -728,6 +728,27 @@ export default function EditorPage() {
       .filter((image): image is StoredDraftImage => image !== null)
   }
 
+  const resolveAuthToken = async () => {
+    if (authToken) {
+      return authToken
+    }
+
+    const currentUser = auth.currentUser
+    if (!currentUser) {
+      return null
+    }
+
+    try {
+      const token = await currentUser.getIdToken()
+      setAuthToken(token)
+      setUserId(currentUser.uid)
+      return token
+    } catch (error) {
+      console.error("Failed to resolve auth token:", error)
+      return null
+    }
+  }
+
   useEffect(() => {
     if (eventParam?.trim() || projectParam?.trim() || draftIdAppliedRef.current) return
     draftIdAppliedRef.current = true
@@ -1278,12 +1299,24 @@ export default function EditorPage() {
       didMutate = true
     }
 
+    const token = await resolveAuthToken()
+    if (!token) {
+      setMessages(prev => [...prev, {
+        id: `${Date.now()}-auth`,
+        role: "assistant",
+        content: "I can't reach the AI yet because your session isn't ready. Give it a moment and try again.",
+        timestamp: new Date(),
+      }])
+      setIsTyping(false)
+      return
+    }
+
     try {
       const response = await fetch("/api/editor/ai", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${authToken}`,
+          "Authorization": `Bearer ${token}`,
         },
         body: JSON.stringify({
           prompt,
@@ -1364,23 +1397,30 @@ export default function EditorPage() {
     setActivePage(newPage.id)
   }
 
-  const handlePreview = () => {
-    const previewData = {
-      id: currentEventId,
-      title: currentInvitation.title,
-      theme: {
-        primaryColor: "from-accent via-primary to-chart-3",
-        backgroundColor: "bg-card",
-      },
-      brand: brandSettings,
-      pages: pages.map((page) => ({
-        id: page.id,
-        type: page.id.split("-")[0],
-        content: page.content,
-      })),
+  const buildPreviewData = () => ({
+    id: currentEventId,
+    title: eventTitle || currentInvitation.title,
+    theme: {
+      primaryColor: "from-accent via-primary to-chart-3",
+      backgroundColor: "bg-card",
+    },
+    brand: brandSettings,
+    pages: pages.map((page) => ({
+      id: page.id,
+      type: page.id.split("-")[0],
+      content: page.content,
+    })),
+  })
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return
     }
 
-    localStorage.setItem("invyra-preview-data", JSON.stringify(previewData))
+    localStorage.setItem("invyra-preview-data", JSON.stringify(buildPreviewData()))
+  }, [currentEventId, eventTitle, brandSettings, pages])
+
+  const handlePreview = () => {
     router.push("/preview")
   }
 

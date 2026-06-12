@@ -94,11 +94,13 @@ export function InvitationPageRenderer({
     rsvpResponse,
     setRsvpResponse,
     brand,
+    onNavigateNext,
 }: {
     page: InvitationPageLike
     rsvpResponse?: "attending" | "not-attending" | null
     setRsvpResponse?: (response: "attending" | "not-attending" | null) => void
     brand?: BrandSettings | null
+    onNavigateNext?: () => void
 }) {
     const { brand: contextBrand } = useBrand()
     const [localRsvpResponse, setLocalRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
@@ -110,7 +112,7 @@ export function InvitationPageRenderer({
     const activeBrand = brand ?? contextBrand
     const activeRsvpResponse = rsvpResponse ?? localRsvpResponse
     const updateRsvpResponse = setRsvpResponse ?? setLocalRsvpResponse
-    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, activeBrand)
+    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, activeBrand, onNavigateNext)
 
     return (
         <div className="invitation-root" style={getInvitationBrandStyles(activeBrand)}>
@@ -172,11 +174,12 @@ function renderPage(
     page: InvitationPageLike,
     rsvpResponse: "attending" | "not-attending" | null,
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void,
-    brand?: BrandSettings | null
+    brand?: BrandSettings | null,
+    onNavigateNext?: () => void
 ): ReactNode {
     switch (page.type) {
         case "cover":
-            return <CoverPage content={page.content} icon={page.icon ?? FileText} brand={brand} />
+            return <CoverPage content={page.content} icon={page.icon ?? FileText} brand={brand} onNavigateNext={onNavigateNext} />
         case "details":
             return <DetailsPage content={page.content} brand={brand} />
         case "rsvp":
@@ -371,6 +374,7 @@ function CoverPage({
     content,
     icon: Icon,
     brand,
+    onNavigateNext,
 }: {
     content: InvitationPageContent
     icon: ElementType
@@ -379,10 +383,11 @@ function CoverPage({
         defaultSubheadline?: string
         defaultCtaLabel?: string
     } | null
+    onNavigateNext?: () => void
 }) {
     const headline = content.headline || brand?.defaultHeadline || "You're Invited"
     const subheadline = content.subheadline || brand?.defaultSubheadline || "to a Special Event"
-    const ctaLabel = brand?.defaultCtaLabel || "View Details"
+    const ctaLabel = content.buttons?.[0]?.label || brand?.defaultCtaLabel || "View Details"
 
     return (
         <div className="relative min-h-[400px] flex flex-col items-center justify-center text-center p-6 md:p-8">
@@ -418,7 +423,11 @@ function CoverPage({
                 )}
 
                 <div className="pt-6">
-                    <Button className="border-0 text-white px-6" style={{ background: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' }}>
+                    <Button
+                        className="border-0 text-white px-6"
+                        style={{ background: 'var(--brand-primary)', borderColor: 'var(--brand-primary)' }}
+                        onClick={onNavigateNext}
+                    >
                         {ctaLabel}
                         <ChevronRight className="w-4 h-4 ml-2" />
                     </Button>

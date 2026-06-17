@@ -89,18 +89,49 @@ export interface InvitationPageLike {
     icon?: ElementType
 }
 
+type RsvpField = { label: string; type: string; required: boolean; options?: string[] }
+
+const declineIdentityFields: RsvpField[] = [
+    { label: "Full Name", type: "text", required: true },
+    { label: "Email", type: "email", required: true },
+]
+
+function extractGuestInfo(
+    fields: RsvpField[],
+    values: Record<number, string>
+): { guestEmail: string; guestName: string } {
+    let guestEmail = ""
+    let guestName = ""
+
+    fields.forEach((field, index) => {
+        const value = values[index]?.trim() ?? ""
+        if (!value) return
+
+        const labelLower = field.label.toLowerCase()
+        if (field.type === "email" || labelLower.includes("email")) {
+            guestEmail = value
+        } else if (labelLower.includes("name")) {
+            guestName = value
+        }
+    })
+
+    return { guestEmail, guestName }
+}
+
 export function InvitationPageRenderer({
     page,
     rsvpResponse,
     setRsvpResponse,
     brand,
     onNavigateNext,
+    eventId,
 }: {
     page: InvitationPageLike
     rsvpResponse?: "attending" | "not-attending" | null
     setRsvpResponse?: (response: "attending" | "not-attending" | null) => void
     brand?: BrandSettings | null
     onNavigateNext?: () => void
+    eventId?: string
 }) {
     const { brand: contextBrand } = useBrand()
     const [localRsvpResponse, setLocalRsvpResponse] = useState<"attending" | "not-attending" | null>(null)
@@ -112,10 +143,10 @@ export function InvitationPageRenderer({
     const activeBrand = brand ?? contextBrand
     const activeRsvpResponse = rsvpResponse ?? localRsvpResponse
     const updateRsvpResponse = setRsvpResponse ?? setLocalRsvpResponse
-    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, activeBrand, onNavigateNext)
+    const pageContent = renderPage(page, activeRsvpResponse, updateRsvpResponse, activeBrand, onNavigateNext, eventId)
 
     return (
-        <div className="invitation-root" style={getInvitationBrandStyles(activeBrand)}>
+        <div className="invitation-root h-full" style={getInvitationBrandStyles(activeBrand)}>
             {pageContent}
             <InvitationElements elements={page.content.elements} />
         </div>
@@ -175,7 +206,8 @@ function renderPage(
     rsvpResponse: "attending" | "not-attending" | null,
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void,
     brand?: BrandSettings | null,
-    onNavigateNext?: () => void
+    onNavigateNext?: () => void,
+    eventId?: string
 ): ReactNode {
     switch (page.type) {
         case "cover":
@@ -183,7 +215,7 @@ function renderPage(
         case "details":
             return <DetailsPage content={page.content} brand={brand} />
         case "rsvp":
-            return <RSVPPage content={page.content} rsvpResponse={rsvpResponse} setRsvpResponse={setRsvpResponse} brand={brand} />
+            return <RSVPPage content={page.content} rsvpResponse={rsvpResponse} setRsvpResponse={setRsvpResponse} brand={brand} eventId={eventId} />
         case "location":
             return <LocationPage content={page.content} brand={brand} />
         case "schedule":
@@ -390,7 +422,7 @@ function CoverPage({
     const ctaLabel = content.buttons?.[0]?.label || brand?.defaultCtaLabel || "View Details"
 
     return (
-        <div className="relative min-h-[400px] flex flex-col items-center justify-center text-center p-6 md:p-8">
+        <div className="relative min-h-[400px] h-full flex flex-col items-center justify-center text-center p-6 md:p-8">
             <div
                 className="absolute inset-0"
                 style={{
@@ -499,18 +531,135 @@ function DetailsPage({ content, brand }: { content: InvitationPageContent; brand
     )
 }
 
+function RsvpFieldInput({
+    field,
+    value,
+    onChange,
+    brand,
+}: {
+    field: RsvpField
+    value: string
+    onChange: (value: string) => void
+    brand?: BrandSettings | null
+}) {
+    const inputClassName = "w-full px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2"
+    const inputStyle = getThemedCardStyle(brand, "primary")
+
+    if (field.type === "textarea") {
+        return (
+            <textarea
+                className={`${inputClassName} resize-none`}
+                style={inputStyle}
+                rows={2}
+                placeholder={`Enter ${field.label.toLowerCase()}...`}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+            />
+        )
+    }
+
+    if (field.type === "select") {
+        return (
+            <select
+                className={inputClassName}
+                style={inputStyle}
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+            >
+                <option value="">Select...</option>
+                {field.options?.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+        )
+    }
+
+    return (
+        <input
+            type={field.type}
+            className={inputClassName}
+            style={inputStyle}
+            placeholder={`Enter ${field.label.toLowerCase()}...`}
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+        />
+    )
+}
+
 function RSVPPage({
     content,
     rsvpResponse,
     setRsvpResponse,
     brand,
+    eventId,
 }: {
     content: InvitationPageContent
     rsvpResponse: "attending" | "not-attending" | null
     setRsvpResponse: (response: "attending" | "not-attending" | null) => void
     brand?: BrandSettings | null
+    eventId?: string
 }) {
     const [submitted, setSubmitted] = useState(false)
+    const [fieldValues, setFieldValues] = useState<Record<number, string>>({})
+    const [isSubmitting, setIsSubmitting] = useState(false)
+    const [submitError, setSubmitError] = useState<string | null>(null)
+
+    const attendingFields = content.fields?.length ? content.fields : declineIdentityFields
+    const activeFields = rsvpResponse === "not-attending" ? declineIdentityFields : attendingFields
+
+    const updateFieldValue = (index: number, value: string) => {
+        setFieldValues((current) => ({ ...current, [index]: value }))
+        if (submitError) setSubmitError(null)
+    }
+
+    const handleSubmit = async () => {
+        if (!rsvpResponse) return
+
+        for (const [index, field] of activeFields.entries()) {
+            if (field.required && !fieldValues[index]?.trim()) {
+                setSubmitError(`Please fill in ${field.label}.`)
+                return
+            }
+        }
+
+        const { guestEmail, guestName } = extractGuestInfo(activeFields, fieldValues)
+        if (!guestEmail) {
+            setSubmitError("Please enter your email address.")
+            return
+        }
+
+        if (!eventId) {
+            setSubmitted(true)
+            return
+        }
+
+        setIsSubmitting(true)
+        setSubmitError(null)
+
+        try {
+            const response = await fetch("/api/invitations/respond", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    eventId,
+                    guestEmail,
+                    guestName: guestName || undefined,
+                    response: rsvpResponse,
+                }),
+            })
+
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok) {
+                throw new Error(typeof data.error === "string" ? data.error : "Failed to submit RSVP")
+            }
+
+            setSubmitted(true)
+        } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : "Failed to submit RSVP")
+        } finally {
+            setIsSubmitting(false)
+        }
+    }
 
     if (submitted) {
         return (
@@ -519,7 +668,11 @@ function RSVPPage({
                     <Calendar className="w-7 h-7 text-white" />
                 </div>
                 <h2 className="text-xl font-semibold mb-2">Thank You!</h2>
-                <p className="text-muted-foreground text-sm">Your RSVP has been received. We look forward to seeing you!</p>
+                <p className="text-muted-foreground text-sm">
+                    {rsvpResponse === "not-attending"
+                        ? "Your response has been received. We'll miss you!"
+                        : "Your RSVP has been received. We look forward to seeing you!"}
+                </p>
             </div>
         )
     }
@@ -533,7 +686,11 @@ function RSVPPage({
 
             <div className="flex gap-3">
                 <button
-                    onClick={() => setRsvpResponse("attending")}
+                    onClick={() => {
+                        setRsvpResponse("attending")
+                        setFieldValues({})
+                        setSubmitError(null)
+                    }}
                     className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "attending"
                             ? "text-foreground"
                             : "border-border/50"
@@ -544,7 +701,11 @@ function RSVPPage({
                     <p className="text-xs text-muted-foreground mt-0.5">Count me in!</p>
                 </button>
                 <button
-                    onClick={() => setRsvpResponse("not-attending")}
+                    onClick={() => {
+                        setRsvpResponse("not-attending")
+                        setFieldValues({})
+                        setSubmitError(null)
+                    }}
                     className={`flex-1 py-3 rounded-xl border-2 transition-all ${rsvpResponse === "not-attending"
                             ? "text-foreground"
                             : "border-border/50"
@@ -558,55 +719,70 @@ function RSVPPage({
 
             {rsvpResponse === "attending" && (
                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                    {content.fields?.map((field, index) => (
+                    {attendingFields.map((field, index) => (
                         <div key={index} className="space-y-1.5">
                             <label className="text-sm font-medium">
                                 {field.label}
                                 {field.required && <span className="text-destructive ml-1">*</span>}
                             </label>
-                            {field.type === "textarea" ? (
-                                <textarea
-                                    className="w-full px-3 py-2 rounded-xl text-sm resize-none focus:outline-none focus:ring-2"
-                                    style={getThemedCardStyle(brand, "primary")}
-                                    rows={2}
-                                    placeholder={`Enter ${field.label.toLowerCase()}...`}
-                                />
-                            ) : field.type === "select" ? (
-                                <select className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2" style={getThemedCardStyle(brand, "primary")}>
-                                    <option value="">Select...</option>
-                                    {field.options?.map((option) => (
-                                        <option key={option} value={option}>{option}</option>
-                                    ))}
-                                </select>
-                            ) : (
-                                <input
-                                    type={field.type}
-                                    className="w-full px-3 py-2 rounded-xl text-sm focus:outline-none focus:ring-2"
-                                    style={getThemedCardStyle(brand, "primary")}
-                                    placeholder={`Enter ${field.label.toLowerCase()}...`}
-                                />
-                            )}
+                            <RsvpFieldInput
+                                field={field}
+                                value={fieldValues[index] ?? ""}
+                                onChange={(value) => updateFieldValue(index, value)}
+                                brand={brand}
+                            />
                         </div>
                     ))}
 
-                    <Button className="w-full gradient-primary border-0 text-white py-5" onClick={() => setSubmitted(true)}>
-                        Submit RSVP
+                    {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+                    <Button
+                        className="w-full gradient-primary border-0 text-white py-5"
+                        onClick={() => void handleSubmit()}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? "Submitting..." : "Submit RSVP"}
                     </Button>
                 </div>
             )}
 
             {rsvpResponse === "not-attending" && (
                 <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {declineIdentityFields.map((field, index) => (
+                        <div key={index} className="space-y-1.5">
+                            <label className="text-sm font-medium">
+                                {field.label}
+                                {field.required && <span className="text-destructive ml-1">*</span>}
+                            </label>
+                            <RsvpFieldInput
+                                field={field}
+                                value={fieldValues[index] ?? ""}
+                                onChange={(value) => updateFieldValue(index, value)}
+                                brand={brand}
+                            />
+                        </div>
+                    ))}
+
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Send a message (optional)</label>
                         <textarea
                             className="w-full px-3 py-2 bg-secondary rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
                             rows={2}
                             placeholder="Sorry I can't make it..."
+                            value={fieldValues[declineIdentityFields.length] ?? ""}
+                            onChange={(event) => updateFieldValue(declineIdentityFields.length, event.target.value)}
                         />
                     </div>
-                    <Button variant="outline" className="w-full py-5" onClick={() => setSubmitted(true)}>
-                        Send Response
+
+                    {submitError && <p className="text-sm text-destructive">{submitError}</p>}
+
+                    <Button
+                        variant="outline"
+                        className="w-full py-5"
+                        onClick={() => void handleSubmit()}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? "Sending..." : "Send Response"}
                     </Button>
                 </div>
             )}

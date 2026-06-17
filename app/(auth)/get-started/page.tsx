@@ -15,30 +15,67 @@ import { requestGoogleAccessToken } from '@/lib/auth/client'
 import { hasReadAllLegalPages, subscribeLegalReadChanges } from '@/lib/legal-read'
 import { useErrorPopup } from '@/components/providers/error-popup-provider'
 
+const FORM_STORAGE_KEY = 'invyra:get-started-form'
+
+type FormData = {
+  name: string; email: string; password: string; agreeToTerms: boolean; receiveUpdates: boolean
+}
+
+const defaultFormData: FormData = {
+  name: "", email: "", password: "", agreeToTerms: false, receiveUpdates: true,
+}
+
+type SavedForm = FormData & { _step?: string; _selectedOption?: string | null }
+
+function loadSavedForm(): SavedForm | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const saved = sessionStorage.getItem(FORM_STORAGE_KEY)
+    return saved ? JSON.parse(saved) : null
+  } catch {
+    return null
+  }
+}
+
+function saveForm(data: FormData, step: string, selectedOption: string | null) {
+  try {
+    sessionStorage.setItem(FORM_STORAGE_KEY, JSON.stringify({ ...data, _step: step, _selectedOption: selectedOption }))
+  } catch { /* quota exceeded, ignore */ }
+}
+
+function clearSavedForm() {
+  try {
+    sessionStorage.removeItem(FORM_STORAGE_KEY)
+  } catch { /* ignore */ }
+}
+
 export default function GetStartedPage() {
   const router = useRouter()
   const { showError } = useErrorPopup()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [step, setStep] = useState<"signup" | "details">("signup")
-  const [selectedOption, setSelectedOption] = useState<string | null>(null)
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    agreeToTerms: false,
-    receiveUpdates: true,
-  })
-  const canContinue = hasReadAllLegalPages()
+
+  const saved = loadSavedForm()
+  const [step, setStep] = useState<"signup" | "details">((saved?._step as "signup" | "details") || "signup")
+  const [selectedOption, setSelectedOption] = useState<string | null>(saved?._selectedOption || null)
+  const [formData, setFormData] = useState({ ...defaultFormData, ...saved })
+  const [canContinue, setCanContinue] = useState(false)
 
   useEffect(() => {
-    setFormData((current) => (current.agreeToTerms === canContinue ? current : { ...current, agreeToTerms: canContinue }))
+    const allowed = hasReadAllLegalPages()
+    setCanContinue(allowed)
+    setFormData((current) => (current.agreeToTerms === allowed ? current : { ...current, agreeToTerms: allowed }))
 
     return subscribeLegalReadChanges(() => {
-      const allowed = hasReadAllLegalPages()
-      setFormData((current) => (current.agreeToTerms === allowed ? current : { ...current, agreeToTerms: allowed }))
+      const updated = hasReadAllLegalPages()
+      setCanContinue(updated)
+      setFormData((current) => (current.agreeToTerms === updated ? current : { ...current, agreeToTerms: updated }))
     })
-  }, [canContinue])
+  }, [])
+
+  useEffect(() => {
+    saveForm(formData, step, selectedOption)
+  }, [formData, step, selectedOption])
 
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
@@ -78,6 +115,7 @@ export default function GetStartedPage() {
     try {
       await createUserWithEmailAndPassword(auth, formData.email, formData.password)
       await saveCurrentUserProfile({ displayName: formData.name })
+      clearSavedForm()
       router.push('/home')
     } catch (err: any) {
       showError({
@@ -107,6 +145,7 @@ export default function GetStartedPage() {
         displayName: userCredential.user.displayName || userCredential.user.email?.split("@")[0] || null,
         photoUrl: userCredential.user.photoURL || null,
       })
+      clearSavedForm()
       router.replace('/home')
     } catch (err: any) {
       showError({

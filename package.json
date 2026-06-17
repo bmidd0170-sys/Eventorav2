@@ -50,14 +50,14 @@
     "date-fns": "4.1.0",
     "dotenv": "^17.4.2",
     "embla-carousel-react": "8.6.0",
-    "firebase": "^12.13.0",
-    "firebase-admin": "^13.9.0",
+    "firebase": "^12.15.0",
+    "firebase-admin": "^14.0.0",
     "input-otp": "1.4.2",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^0.564.0",
-    "next": "^16.2.5",
+    "next": "^16.2.9",
     "next-themes": "^0.4.6",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^8.0.9",
     "qrcode": "^1.5.4",
     "react": "^19",
     "react-day-picker": "9.13.2",
@@ -84,6 +84,25 @@
     "typescript": "5.7.3"
   },
   "overrides": {
-    "postcss": "^8.5.14"
+    "postcss": "^8.5.14",
+    "lodash": "^4.18.0",
+    "@firebase/firestore>@grpc/grpc-js": "1.9.16",
+    "google-gax>@grpc/grpc-js": "1.14.4",
+    "protobufjs": "^7.6.3",
+    "form-data": "^2.5.6",
+    "uuid": "^11.1.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.14",
+      "next>postcss": "^8.5.14",
+      "lodash": "^4.18.0",
+      "recharts>lodash": "^4.18.0",
+      "@firebase/firestore>@grpc/grpc-js": "1.9.16",
+      "google-gax>@grpc/grpc-js": "1.14.4",
+      "protobufjs": "^7.6.3",
+      "form-data": "^2.5.6",
+      "uuid": "^11.1.1"
+    }
   }
 }

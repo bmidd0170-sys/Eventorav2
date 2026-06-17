@@ -2,10 +2,11 @@ import { redirect } from "next/navigation"
 
 import { defaultInvitationId } from "@/lib/invitations"
 
-export default function EventsRedirectPage({
+export default async function EventsRedirectPage({
     searchParams,
 }: {
-    searchParams?: { id?: string }
+    searchParams?: Promise<{ id?: string }>
 }) {
-    redirect(`/guest-list/${searchParams?.id || defaultInvitationId}`)
+    const resolvedSearchParams = await searchParams
+    redirect(`/guest-list/${resolvedSearchParams?.id || defaultInvitationId}`)
 }

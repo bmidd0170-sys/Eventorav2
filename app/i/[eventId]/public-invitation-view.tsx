@@ -100,6 +100,7 @@ export function PublicInvitationView({
             setRsvpResponse={setRsvpResponse}
             brand={brand}
             onNavigateNext={() => setCurrentPageIndex((index) => Math.min(totalPages - 1, index + 1))}
+            eventId={eventId}
           />
         </div>
 

@@ -3,15 +3,15 @@
 ## Commands
 
 ```bash
-pnpm install        # pnpm-lock.yaml is authoritative; package-lock.json is stale
-pnpm dev            # next dev — kill prior server on port 3000 first
-pnpm build          # runs `prisma generate && next build`; ignores TS errors
-pnpm lint           # eslint . (uses Next.js built-in config; no eslintrc file)
-npx tsc --noEmit    # actual typecheck — build does NOT catch type errors
-npx prisma generate # after schema changes
-npx prisma db push  # sync schema to Neon/Postgres without migration files
-scripts/test-smtp.js # sends an SMTP test to SMTP_USER (requires .env)
-scripts/test-prisma.js # verifies DB connectivity
+pnpm install             # postinstall → prisma generate
+pnpm dev                 # next dev --webpack; kill prior process on :3000 first
+pnpm build               # prisma generate && next build (ignores TS errors)
+pnpm lint                # eslint . (Next.js built-in config, no eslintrc)
+npx tsc --noEmit         # actual typecheck — build does NOT catch type errors
+npx prisma generate      # after schema changes (auto-runs on install/build)
+npx prisma db push       # sync schema to Neon/Postgres (no migration files)
+scripts/test-smtp.js     # SMTP test to SMTP_USER (needs .env)
+scripts/test-prisma.js   # DB connectivity test
 ```
 
 No test framework is configured.
@@ -22,22 +22,23 @@ No test framework is configured.
 - **Tailwind v4** via `@tailwindcss/postcss` + `tw-animate-css`. Theme in `app/globals.css` (`@theme inline`, no `tailwind.config.js`)
 - **shadcn/ui** New York, RSC, lucide. Add: `npx shadcn@latest add <name>`
 - **Dark-only**: `<html className="dark">` in `app/layout.tsx:50`
-- **Prisma** — PostgreSQL via Neon (`DATABASE_URL`). Client: `@/lib/prisma.ts`
-- **Firebase Auth** (`@/lib/firebase.ts`) — Firestore is imported but unused; all social features (connections, requests) are in PostgreSQL via Prisma.
+- **Prisma** — PostgreSQL via Neon (`DATABASE_URL`). Client: `@/lib/prisma.ts` (also re-exported as `@/lib/db/index.ts`)
+- **Firebase Auth** (`@/lib/firebase.ts`) — Firestore `db` exported but unused; all social features in PostgreSQL via Prisma.
+- **Firebase Admin** (`@/lib/firebase-admin.ts`) — optional credentials (`FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`). Without them, `verifyFirebaseIdToken()` returns null and API auth falls back to `jwtDecode()`.
+- **Auth**: API routes import `getAuthenticatedDbUser()` from `@/lib/auth/server` (re-exports `@/lib/api-auth`). Decodes Firebase JWT Bearer, verifies admin-side if creds available, upserts DB user.
 - **OpenAI** — editor AI assistant at `app/api/editor/ai/route.ts` (uses `OPENAI_API_KEY`, falls back to canned replies)
 - **Google Maps** — loaded lazily in root layout via `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
-- **nodemailer** — SMTP emails via `lib/email.ts`. Config: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME`
+- **nodemailer** — SMTP via `lib/email.ts`. Config: `SMTP_HOST`, `SMTP_PORT` (default 587), `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_FROM_NAME`
 - Generated from **v0.app** boilerplate
 
 ## Email system
 
-All email flows use `lib/email.ts` (nodemailer) via `lib/email-templates.ts` for template builders. Two sending patterns exist:
+All email flows use `lib/email.ts` (nodemailer). Two patterns:
 
-**Direct `sendEmail()`** — invitation send, RSVP confirmations, event unpublish/cancel reminders, tutorial complete, app updates, welcome signup.
-
-**`sendEmailIfAllowed()`** — wrapper in `lib/notifications.ts` and `app/api/connections/route.ts` that checks `UserNotificationSettings` before sending. Used for connection requests and connection accepted.
-
-### Email triggers per API endpoint
+- **`sendEmail()`** — direct call in route handlers for invitations, RSVPs, event unpublish/cancel, reminders, tutorial-complete, app updates, welcome.
+- **`sendEmailIfAllowed()`** — two independent implementations:
+  - `lib/notifications.ts` — client-side, proxies through `POST /api/send-email`, checks `UserNotificationSettings`
+  - `app/api/connections/route.ts` — server-side, inline, checks settings then calls `sendEmail()` directly
 
 | Endpoint | Recipient | Template | Checks settings |
 |----------|-----------|----------|-----------------|
@@ -53,7 +54,7 @@ All email flows use `lib/email.ts` (nodemailer) via `lib/email-templates.ts` for
 | `POST /api/notifications/app-updates` | All opted-in users | `buildAppUpdateEmail` | Checks `emailAppUpdates` |
 | Signup form (client-side) | User | `buildWelcomeEmail` | No |
 
-All settings gates use fallback to `defaultNotificationSettings` from `lib/notification-settings.ts`. The Prisma schema (`UserNotificationSettings`) and the TypeScript type are in sync.
+Settings default to `defaultNotificationSettings` from `lib/notification-settings.ts`. Prisma schema `UserNotificationSettings` and TS type are in sync.
 
 ## Routes
 
@@ -85,4 +86,7 @@ All settings gates use fallback to `defaultNotificationSettings` from `lib/notif
 - `postcss` pinned via `overrides` in `package.json` — don't upgrade independently of Tailwind v4.
 - Social features (connections, requests) live in PostgreSQL via Prisma models (`SocialConnection`, `ConnectionRequest`), not Firestore. Firestore `db` export is unused.
 - Vercel Analytics renders only in `production` (`app/layout.tsx:62`).
-- Auth: API routes use `getAuthenticatedDbUser()` from `lib/api-auth.ts` which decodes a Firebase JWT Bearer token and upserts the DB user. No `firebase-admin` SDK verification on every request.
+- `@/lib/auth/server` is the canonical import for `getAuthenticatedDbUser()` (re-exports from `@/lib/api-auth`).
+- Firebase Admin credentials are optional; without them, token verification falls back to `jwtDecode()` (no server-side validation).
+- `next.config.mjs:9-20` sets `Cross-Origin-Opener-Policy: same-origin-allow-popups` globally.
+- `next.config.mjs:7` sets `images.unoptimized: true` — no built-in image optimization.

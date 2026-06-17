@@ -4,6 +4,8 @@ import { getAuthenticatedDbUser } from "@/lib/auth/server"
 import { internalServerError, unauthorized } from "@/lib/api/responses"
 import { ok } from "@/lib/api/success"
 
+export const runtime = "nodejs"
+
 function serializeUser(user: {
   id: string
   email: string

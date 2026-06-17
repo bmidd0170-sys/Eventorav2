@@ -1,7 +1,6 @@
 import "server-only"
 
-import { cert, getApps, initializeApp } from "firebase-admin/app"
-import { getAuth, type DecodedIdToken } from "firebase-admin/auth"
+import type { DecodedIdToken } from "firebase-admin/auth"
 
 function cleanEnv(value: string | undefined) {
   return value?.trim().replace(/^['"]|['"]$/g, "")
@@ -13,10 +12,13 @@ export function hasFirebaseAdminCredentials() {
   )
 }
 
-function getAdminApp() {
+async function getAdminAuth() {
+  const { cert, getApps, initializeApp } = await import("firebase-admin/app")
+  const { getAuth } = await import("firebase-admin/auth")
+
   const existingApp = getApps()[0]
   if (existingApp) {
-    return existingApp
+    return getAuth(existingApp)
   }
 
   const projectId = cleanEnv(process.env.FIREBASE_PROJECT_ID) || cleanEnv(process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID)
@@ -27,7 +29,7 @@ function getAdminApp() {
     throw new Error("Firebase Admin credentials are not configured. Set FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY.")
   }
 
-  return initializeApp({
+  const app = initializeApp({
     credential: cert({
       projectId,
       clientEmail,
@@ -35,6 +37,8 @@ function getAdminApp() {
     }),
     projectId,
   })
+
+  return getAuth(app)
 }
 
 export async function deleteFirebaseAuthUser(firebaseUid: string) {
@@ -42,7 +46,7 @@ export async function deleteFirebaseAuthUser(firebaseUid: string) {
     return { deleted: false as const, skipped: true as const }
   }
 
-  const auth = getAuth(getAdminApp())
+  const auth = await getAdminAuth()
 
   try {
     await auth.deleteUser(firebaseUid)
@@ -63,6 +67,6 @@ export async function verifyFirebaseIdToken(token: string): Promise<DecodedIdTok
     return null
   }
 
-  const auth = getAuth(getAdminApp())
+  const auth = await getAdminAuth()
   return auth.verifyIdToken(token)
 }

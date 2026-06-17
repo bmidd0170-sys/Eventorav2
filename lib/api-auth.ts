@@ -55,38 +55,43 @@ async function getOrCreateDbUser(decodedToken: DecodedToken): Promise<User | nul
 }
 
 export async function getAuthenticatedDbUser(req: NextRequest) {
-  const authHeader = req.headers.get("authorization")
-  if (!authHeader?.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authHeader.slice(7)
-  let decodedToken: DecodedToken
-  const verifiedToken = await verifyFirebaseIdToken(token).catch(() => null)
-
-  if (verifiedToken) {
-    decodedToken = {
-      sub: verifiedToken.uid,
-      email: verifiedToken.email,
-      name: verifiedToken.name,
-      picture: verifiedToken.picture,
-    }
-  } else {
-    try {
-      decodedToken = jwtDecode(token) as DecodedToken
-    } catch {
+  try {
+    const authHeader = req.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return null
     }
-  }
 
-  const dbUser = await getOrCreateDbUser(decodedToken)
-  if (!dbUser) {
+    const token = authHeader.slice(7)
+    let decodedToken: DecodedToken
+    const verifiedToken = await verifyFirebaseIdToken(token).catch(() => null)
+
+    if (verifiedToken) {
+      decodedToken = {
+        sub: verifiedToken.uid,
+        email: verifiedToken.email,
+        name: verifiedToken.name,
+        picture: verifiedToken.picture,
+      }
+    } else {
+      try {
+        decodedToken = jwtDecode(token) as DecodedToken
+      } catch {
+        return null
+      }
+    }
+
+    const dbUser = await getOrCreateDbUser(decodedToken)
+    if (!dbUser) {
+      return null
+    }
+
+    return {
+      dbUser,
+      decodedToken,
+      firebaseUid: decodedToken.sub as string,
+    }
+  } catch (error) {
+    console.error("Authentication error:", error)
     return null
-  }
-
-  return {
-    dbUser,
-    decodedToken,
-    firebaseUid: decodedToken.sub as string,
   }
 }

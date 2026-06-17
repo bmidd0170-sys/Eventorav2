@@ -115,7 +115,7 @@ export async function getFriendlyResponseMessage(response: Response, fallback = 
     }
 
     const text = (await response.clone().text()).trim()
-    if (text) {
+    if (text && !text.startsWith("<!DOCTYPE html") && !text.startsWith("<html")) {
       return mapResponseStatus(getFriendlyErrorMessage(text, fallback), response.status, fallback)
     }
   } catch {

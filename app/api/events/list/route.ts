@@ -4,6 +4,8 @@ import { getAuthenticatedDbUser } from "@/lib/auth/server"
 import { internalServerError, unauthorized } from "@/lib/api/responses"
 import { ok } from "@/lib/api/success"
 
+export const runtime = "nodejs"
+
 export async function POST(req: NextRequest) {
   try {
     const authResult = await getAuthenticatedDbUser(req)

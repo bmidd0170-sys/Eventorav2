@@ -3,6 +3,7 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  serverExternalPackages: ["@prisma/client", "prisma", "firebase-admin"],
   images: {
     unoptimized: true,
   },
